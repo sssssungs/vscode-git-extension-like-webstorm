@@ -1,0 +1,62 @@
+{
+  "name": "git-branch-panel",
+  "displayName": "Git Branch Panel",
+  "description": "A minimal VS Code extension that shows local and remote branches together.",
+  "version": "0.0.1",
+  "publisher": "local-dev",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:gitBranchPanel.branchesView",
+    "onCommand:gitBranchPanel.refresh"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitBranchPanel",
+          "title": "Branches",
+          "icon": "media/branches.svg"
+        }
+      ]
+    },
+    "views": {
+      "gitBranchPanel": [
+        {
+          "id": "gitBranchPanel.branchesView",
+          "name": "Local + Remote"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "gitBranchPanel.refresh",
+        "title": "Git Branch Panel: Refresh"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "gitBranchPanel.refresh",
+          "when": "view == gitBranchPanel.branchesView",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.5"
+  }
+}
