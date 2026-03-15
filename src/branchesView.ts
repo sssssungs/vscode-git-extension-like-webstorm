@@ -1,7 +1,12 @@
 import * as vscode from "vscode";
 import { type GitBranch, getGitBranchData } from "./git";
 
-type BranchNodeType = "repository" | "group" | "pathGroup" | "branch" | "message";
+type BranchNodeType =
+  | "repository"
+  | "group"
+  | "pathGroup"
+  | "branch"
+  | "message";
 type BranchKind = "local" | "remote" | null;
 export type BranchSortMode = "name" | "updated";
 export type BranchViewMode = "list" | "grouped";
@@ -125,13 +130,27 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
 
       if (this.viewMode === "grouped") {
         if (isLocalBranchGroup && data.currentBranch) {
-          const currentBranch = branches.find((branch) => branch.name === data.currentBranch);
-          const otherBranches = branches.filter((branch) => branch.name !== data.currentBranch);
+          const currentBranch = branches.find(
+            (branch) => branch.name === data.currentBranch,
+          );
+          const otherBranches = branches.filter(
+            (branch) => branch.name !== data.currentBranch,
+          );
 
           if (currentBranch) {
             return [
-              createBranchItem(currentBranch, "local", data.currentBranch, currentBranch.name),
-              ...buildGroupedBranchItems(otherBranches, "local", data.currentBranch, null),
+              createBranchItem(
+                currentBranch,
+                "local",
+                data.currentBranch,
+                currentBranch.name,
+              ),
+              ...buildGroupedBranchItems(
+                otherBranches,
+                "local",
+                data.currentBranch,
+                null,
+              ),
             ];
           }
         }
@@ -145,7 +164,11 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
       }
 
       return branches.map((branch) =>
-        createBranchItem(branch, isLocalBranchGroup ? "local" : "remote", data.currentBranch),
+        createBranchItem(
+          branch,
+          isLocalBranchGroup ? "local" : "remote",
+          data.currentBranch,
+        ),
       );
     }
 
@@ -239,8 +262,12 @@ function sortLocalBranches(
       : sortBranches(branches, sortMode);
   }
 
-  const currentBranches = branches.filter((branch) => branch.name === currentBranch);
-  const remainingBranches = branches.filter((branch) => branch.name !== currentBranch);
+  const currentBranches = branches.filter(
+    (branch) => branch.name === currentBranch,
+  );
+  const remainingBranches = branches.filter(
+    (branch) => branch.name !== currentBranch,
+  );
   const otherBranches = prioritizeDisconnectedBranches
     ? sortBranchesWithDisconnectedFirst(remainingBranches, sortMode)
     : sortBranches(remainingBranches, sortMode);
@@ -275,7 +302,9 @@ function sortBranchesWithDisconnectedFirst(
   branches: GitBranch[],
   sortMode: BranchSortMode,
 ): GitBranch[] {
-  const disconnectedBranches = branches.filter((branch) => !branch.upstreamName);
+  const disconnectedBranches = branches.filter(
+    (branch) => !branch.upstreamName,
+  );
   const connectedBranches = branches.filter((branch) => branch.upstreamName);
 
   return [
@@ -285,7 +314,9 @@ function sortBranchesWithDisconnectedFirst(
 }
 
 function buildBranchTooltip(branch: GitBranch): string {
-  const upstreamLine = branch.upstreamName ? `\nUpstream: ${branch.upstreamName}` : "\nUpstream: none";
+  const upstreamLine = branch.upstreamName
+    ? `\nUpstream: ${branch.upstreamName}`
+    : "\nUpstream: none";
 
   if (!branch.lastUpdatedAt) {
     return `${branch.name}${upstreamLine}`;
@@ -296,7 +327,9 @@ function buildBranchTooltip(branch: GitBranch): string {
 }
 
 function getRemoteGroupLabel(remoteName: string | null): string {
-  return remoteName ? `${REMOTE_BRANCHES_LABEL} (${remoteName})` : REMOTE_BRANCHES_LABEL;
+  return remoteName
+    ? `${REMOTE_BRANCHES_LABEL} (${remoteName})`
+    : REMOTE_BRANCHES_LABEL;
 }
 
 function createBranchItem(
@@ -306,7 +339,10 @@ function createBranchItem(
   labelOverride?: string,
 ): BranchTreeItem {
   const item = new BranchTreeItem(
-    labelOverride ?? (branchKind === "local" ? branch.name : branch.shortName ?? branch.name),
+    labelOverride ??
+      (branchKind === "local"
+        ? branch.name
+        : (branch.shortName ?? branch.name)),
     "branch",
     vscode.TreeItemCollapsibleState.None,
     undefined,
@@ -324,13 +360,16 @@ function createBranchItem(
     item.fullBranchName = branch.name;
   }
 
-  item.hasUpstream = branchKind === "local" ? Boolean(branch.upstreamName) : true;
+  item.hasUpstream =
+    branchKind === "local" ? Boolean(branch.upstreamName) : true;
   item.upstreamName = branch.upstreamName;
   item.needsPush = branchKind === "local" ? needsPush(branch) : false;
 
   if (branchKind === "local" && item.needsPush) {
     item.contextValue =
-      branch.name === currentBranch ? "currentPushableLocalBranch" : "pushableLocalBranch";
+      branch.name === currentBranch
+        ? "currentPushableLocalBranch"
+        : "pushableLocalBranch";
   }
 
   if (branchKind === "local") {
@@ -344,14 +383,34 @@ function createBranchItem(
       markers.push("☝️");
     }
 
-    item.description = markers.join(" ");
+    const descriptionParts: string[] = [];
+
+    if (branch.upstreamName) {
+      descriptionParts.push(`🞵 ${branch.upstreamName}`);
+    }
+
+    if (markers.length > 0) {
+      descriptionParts.push(markers.join(" "));
+    }
+
+    item.description = descriptionParts.join("  ");
   }
 
   item.iconPath =
     branchKind === "local" && !item.hasUpstream
       ? {
-          light: vscode.Uri.joinPath(vscode.Uri.file(__dirname), "..", "media", "blank.svg"),
-          dark: vscode.Uri.joinPath(vscode.Uri.file(__dirname), "..", "media", "blank.svg"),
+          light: vscode.Uri.joinPath(
+            vscode.Uri.file(__dirname),
+            "..",
+            "media",
+            "blank.svg",
+          ),
+          dark: vscode.Uri.joinPath(
+            vscode.Uri.file(__dirname),
+            "..",
+            "media",
+            "blank.svg",
+          ),
         }
       : new vscode.ThemeIcon("git-branch");
   item.tooltip = buildBranchTooltip(branch);
@@ -368,10 +427,18 @@ function buildGroupedBranchItems(
   const directBranches: GitBranch[] = [];
 
   for (const branch of branches) {
-    const displayName = branchKind === "local" ? branch.name : branch.shortName ?? branch.name;
-    const relativeName = parentPrefix ? trimPrefix(displayName, `${parentPrefix}/`) : displayName;
+    const displayName =
+      branchKind === "local" ? branch.name : (branch.shortName ?? branch.name);
+    const relativeName = parentPrefix
+      ? trimPrefix(displayName, `${parentPrefix}/`)
+      : displayName;
 
-    if (!relativeName || relativeName === displayName && parentPrefix && !displayName.startsWith(`${parentPrefix}/`)) {
+    if (
+      !relativeName ||
+      (relativeName === displayName &&
+        parentPrefix &&
+        !displayName.startsWith(`${parentPrefix}/`))
+    ) {
       continue;
     }
 
@@ -382,8 +449,13 @@ function buildGroupedBranchItems(
     }
 
     const nextSegment = relativeName.slice(0, slashIndex);
-    const currentPrefix = parentPrefix ? `${parentPrefix}/${nextSegment}` : nextSegment;
-    groupedBranches.set(currentPrefix, [...(groupedBranches.get(currentPrefix) ?? []), branch]);
+    const currentPrefix = parentPrefix
+      ? `${parentPrefix}/${nextSegment}`
+      : nextSegment;
+    groupedBranches.set(currentPrefix, [
+      ...(groupedBranches.get(currentPrefix) ?? []),
+      branch,
+    ]);
   }
 
   const groupItems = [...groupedBranches.keys()]
@@ -403,7 +475,8 @@ function buildGroupedBranchItems(
     });
 
   const branchItems = directBranches.map((branch) => {
-    const displayName = branchKind === "local" ? branch.name : branch.shortName ?? branch.name;
+    const displayName =
+      branchKind === "local" ? branch.name : (branch.shortName ?? branch.name);
     const label =
       parentPrefix && displayName.startsWith(`${parentPrefix}/`)
         ? displayName.slice(parentPrefix.length + 1)
