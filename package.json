@@ -17,6 +17,7 @@
     "onCommand:gitBranchPanel.checkoutLocalBranch",
     "onCommand:gitBranchPanel.createLocalBranch",
     "onCommand:gitBranchPanel.pushLocalBranch",
+    "onCommand:gitBranchPanel.deleteLocalBranch",
     "onCommand:gitBranchPanel.checkoutRemoteBranchAsLocal",
     "onCommand:gitBranchPanel.createIndependentLocalBranchFromRemote",
     "onCommand:gitBranchPanel.changeSortOrder",
@@ -59,6 +60,11 @@
         "command": "gitBranchPanel.pushLocalBranch",
         "title": "Push Branch",
         "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "gitBranchPanel.deleteLocalBranch",
+        "title": "Delete Branch",
+        "icon": "$(trash)"
       },
       {
         "command": "gitBranchPanel.checkoutRemoteBranchAsLocal",
@@ -179,6 +185,11 @@
           "group": "inline@2"
         },
         {
+          "command": "gitBranchPanel.deleteLocalBranch",
+          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == pushableLocalBranch)",
+          "group": "inline@3"
+        },
+        {
           "command": "gitBranchPanel.checkoutRemoteBranchAsLocal",
           "when": "view == gitBranchPanel.branchesView && viewItem == remoteBranch",
           "group": "navigation"
@@ -187,6 +198,11 @@
           "command": "gitBranchPanel.createIndependentLocalBranchFromRemote",
           "when": "view == gitBranchPanel.branchesView && viewItem == remoteBranch",
           "group": "navigation@2"
+        },
+        {
+          "command": "gitBranchPanel.syncRemoteBranches",
+          "when": "view == gitBranchPanel.branchesView && viewItem == localGroup",
+          "group": "inline"
         },
         {
           "command": "gitBranchPanel.syncRemoteBranches",

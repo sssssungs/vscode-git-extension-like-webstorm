@@ -107,6 +107,17 @@ export async function pushLocalBranch(branchName: string, upstreamName?: string 
   await runGitCommand(repositoryPath, ["push", remoteName, `${branchName}:${shortBranchName}`]);
 }
 
+export async function deleteLocalBranch(branchName: string): Promise<void> {
+  const repositoryPath = await getRepositoryPath();
+  await runGitCommand(repositoryPath, ["branch", "-d", branchName]);
+}
+
+export async function deleteRemoteBranch(upstreamName: string): Promise<void> {
+  const repositoryPath = await getRepositoryPath();
+  const { remoteName, shortBranchName } = parseRemoteBranchName(upstreamName);
+  await runGitCommand(repositoryPath, ["push", remoteName, "--delete", shortBranchName]);
+}
+
 export async function checkoutRemoteBranchAsLocal(
   remoteBranchName: string,
   localBranchName: string,

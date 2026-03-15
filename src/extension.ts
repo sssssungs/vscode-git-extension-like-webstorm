@@ -8,6 +8,8 @@ import {
   checkoutLocalBranch,
   createLocalBranch,
   createIndependentLocalBranchFromRemote,
+  deleteLocalBranch,
+  deleteRemoteBranch,
   checkoutRemoteBranchAsLocal,
   getRepositoryGithubUrl,
   pushLocalBranch,
@@ -211,6 +213,85 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
+  const deleteLocalBranchCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.deleteLocalBranch",
+    async (item?: {
+      branchKind?: string;
+      fullBranchName?: string;
+      label?: string;
+      upstreamName?: string | null;
+    }) => {
+      if (item?.branchKind !== "local") {
+        return;
+      }
+
+      const branchName = item.fullBranchName ?? item.label;
+      if (!branchName) {
+        return;
+      }
+
+      try {
+        if (!item.upstreamName) {
+          const confirmed = await vscode.window.showWarningMessage(
+            `Delete local branch "${branchName}"?`,
+            { modal: true },
+            "Delete",
+          );
+
+          if (confirmed !== "Delete") {
+            return;
+          }
+
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `Deleting local branch ${branchName}`,
+            },
+            async () => {
+              await deleteLocalBranch(branchName);
+            },
+          );
+        } else {
+          const choice = await vscode.window.showWarningMessage(
+            `Delete branch "${branchName}" locally only, or delete both local and remote?`,
+            { modal: true },
+            "Local Only",
+            "Local + Remote",
+          );
+
+          if (!choice) {
+            return;
+          }
+
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title:
+                choice === "Local + Remote"
+                  ? `Deleting local and remote branch ${branchName}`
+                  : `Deleting local branch ${branchName}`,
+            },
+            async () => {
+              if (choice === "Local + Remote") {
+                await deleteRemoteBranch(item.upstreamName!);
+              }
+
+              await deleteLocalBranch(branchName);
+              await syncRemoteBranches();
+            },
+          );
+        }
+
+        vscode.window.showInformationMessage(`Deleted branch: ${branchName}`);
+        branchesViewProvider.refresh();
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to delete branch.";
+        vscode.window.showErrorMessage(message);
+      }
+    },
+  );
+
   const changeSortOrderCommand = vscode.commands.registerCommand(
     "gitBranchPanel.changeSortOrder",
     async () => {
@@ -346,6 +427,7 @@ export function activate(context: vscode.ExtensionContext): void {
     createIndependentLocalBranchCommand,
     createLocalBranchCommand,
     pushLocalBranchCommand,
+    deleteLocalBranchCommand,
     changeSortOrderCommand,
     toggleDisconnectedSortCommand,
     enableDisconnectedSortCommand,
