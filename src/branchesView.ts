@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import { type GitBranch, getGitBranchData } from "./git";
 
-type BranchNodeType = "repository" | "group" | "branch" | "message";
+type BranchNodeType = "repository" | "group" | "pathGroup" | "branch" | "message";
 type BranchKind = "local" | "remote" | null;
 export type BranchSortMode = "name" | "updated";
+export type BranchViewMode = "list" | "grouped";
 
 const REPOSITORY_LABEL = "Repository";
 const LOCAL_BRANCHES_LABEL = "Local";
@@ -14,6 +15,7 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     BranchTreeItem | undefined | void
   >();
   private sortMode: BranchSortMode = "updated";
+  private viewMode: BranchViewMode = "list";
 
   readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
 
@@ -32,6 +34,15 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
 
   getSortDescription(): string {
     return this.sortMode === "name" ? "Name" : "Updated";
+  }
+
+  setViewMode(viewMode: BranchViewMode): void {
+    this.viewMode = viewMode;
+    this.refresh();
+  }
+
+  getViewMode(): BranchViewMode {
+    return this.viewMode;
   }
 
   getTreeItem(element: BranchTreeItem): vscode.TreeItem {
@@ -98,28 +109,45 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
         ];
       }
 
-      return branches.map((branch) => {
-        const item = new BranchTreeItem(
-          isLocalBranchGroup ? branch.name : branch.shortName ?? branch.name,
-          "branch",
-          vscode.TreeItemCollapsibleState.None,
-          undefined,
-          isLocalBranchGroup ? "local" : "remote",
-        );
+      if (this.viewMode === "grouped") {
+        if (isLocalBranchGroup && data.currentBranch) {
+          const currentBranch = branches.find((branch) => branch.name === data.currentBranch);
+          const otherBranches = branches.filter((branch) => branch.name !== data.currentBranch);
 
-        if (isLocalBranchGroup && branch.name === data.currentBranch) {
-          item.contextValue = "currentLocalBranch";
-          item.description = "✨";
-        } else if (isLocalBranchGroup) {
-          item.contextValue = "localBranch";
-        } else {
-          item.contextValue = "remoteBranch";
-          item.fullBranchName = branch.name;
+          if (currentBranch) {
+            return [
+              createBranchItem(currentBranch, "local", data.currentBranch, currentBranch.name),
+              ...buildGroupedBranchItems(otherBranches, "local", data.currentBranch, null),
+            ];
+          }
         }
 
-        item.tooltip = buildBranchTooltip(branch);
-        return item;
-      });
+        return buildGroupedBranchItems(
+          branches,
+          isLocalBranchGroup ? "local" : "remote",
+          data.currentBranch,
+          null,
+        );
+      }
+
+      return branches.map((branch) =>
+        createBranchItem(branch, isLocalBranchGroup ? "local" : "remote", data.currentBranch),
+      );
+    }
+
+    if (element.nodeType === "pathGroup") {
+      const branchKind = element.branchKind === "local" ? "local" : "remote";
+      const isLocalBranchGroup = branchKind === "local";
+      const branches = isLocalBranchGroup
+        ? sortLocalBranches(data.localBranches, data.currentBranch, this.sortMode)
+        : sortBranches(data.remoteBranches, this.sortMode);
+
+      return buildGroupedBranchItems(
+        branches,
+        branchKind,
+        data.currentBranch,
+        element.pathPrefix ?? null,
+      );
     }
 
     return [];
@@ -128,6 +156,8 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
 
 class BranchTreeItem extends vscode.TreeItem {
   public fullBranchName?: string;
+  public pathPrefix?: string;
+  public hasUpstream?: boolean;
 
   constructor(
     public readonly label: string,
@@ -147,6 +177,11 @@ class BranchTreeItem extends vscode.TreeItem {
 
     if (nodeType === "group") {
       this.iconPath = getGroupIcon(label);
+      return;
+    }
+
+    if (nodeType === "pathGroup") {
+      this.iconPath = new vscode.ThemeIcon("folder");
       return;
     }
 
@@ -213,14 +248,115 @@ function sortBranches(
 }
 
 function buildBranchTooltip(branch: GitBranch): string {
+  const upstreamLine = branch.upstreamName ? `\nUpstream: ${branch.upstreamName}` : "\nUpstream: none";
+
   if (!branch.lastUpdatedAt) {
-    return branch.name;
+    return `${branch.name}${upstreamLine}`;
   }
 
   const updatedAt = new Date(branch.lastUpdatedAt * 1000).toLocaleString();
-  return `${branch.name}\nUpdated: ${updatedAt}`;
+  return `${branch.name}\nUpdated: ${updatedAt}${upstreamLine}`;
 }
 
 function getRemoteGroupLabel(remoteName: string | null): string {
   return remoteName ? `${REMOTE_BRANCHES_LABEL} (${remoteName})` : REMOTE_BRANCHES_LABEL;
+}
+
+function createBranchItem(
+  branch: GitBranch,
+  branchKind: "local" | "remote",
+  currentBranch: string | null,
+  labelOverride?: string,
+): BranchTreeItem {
+  const item = new BranchTreeItem(
+    labelOverride ?? (branchKind === "local" ? branch.name : branch.shortName ?? branch.name),
+    "branch",
+    vscode.TreeItemCollapsibleState.None,
+    undefined,
+    branchKind,
+  );
+
+  if (branchKind === "local" && branch.name === currentBranch) {
+    item.contextValue = "currentLocalBranch";
+    item.description = "✨";
+    item.fullBranchName = branch.name;
+  } else if (branchKind === "local") {
+    item.contextValue = "localBranch";
+    item.fullBranchName = branch.name;
+  } else {
+    item.contextValue = "remoteBranch";
+    item.fullBranchName = branch.name;
+  }
+
+  item.hasUpstream = branchKind === "local" ? Boolean(branch.upstreamName) : true;
+  item.iconPath =
+    branchKind === "local" && !item.hasUpstream
+      ? {
+          light: vscode.Uri.joinPath(vscode.Uri.file(__dirname), "..", "media", "blank.svg"),
+          dark: vscode.Uri.joinPath(vscode.Uri.file(__dirname), "..", "media", "blank.svg"),
+        }
+      : new vscode.ThemeIcon("git-branch");
+  item.tooltip = buildBranchTooltip(branch);
+  return item;
+}
+
+function buildGroupedBranchItems(
+  branches: GitBranch[],
+  branchKind: "local" | "remote",
+  currentBranch: string | null,
+  parentPrefix: string | null,
+): BranchTreeItem[] {
+  const groupedBranches = new Map<string, GitBranch[]>();
+  const directBranches: GitBranch[] = [];
+
+  for (const branch of branches) {
+    const displayName = branchKind === "local" ? branch.name : branch.shortName ?? branch.name;
+    const relativeName = parentPrefix ? trimPrefix(displayName, `${parentPrefix}/`) : displayName;
+
+    if (!relativeName || relativeName === displayName && parentPrefix && !displayName.startsWith(`${parentPrefix}/`)) {
+      continue;
+    }
+
+    const slashIndex = relativeName.indexOf("/");
+    if (slashIndex === -1) {
+      directBranches.push(branch);
+      continue;
+    }
+
+    const nextSegment = relativeName.slice(0, slashIndex);
+    const currentPrefix = parentPrefix ? `${parentPrefix}/${nextSegment}` : nextSegment;
+    groupedBranches.set(currentPrefix, [...(groupedBranches.get(currentPrefix) ?? []), branch]);
+  }
+
+  const groupItems = [...groupedBranches.keys()]
+    .sort((left, right) => left.localeCompare(right))
+    .map((prefix) => {
+      const label = prefix.split("/").pop() ?? prefix;
+      const item = new BranchTreeItem(
+        label,
+        "pathGroup",
+        vscode.TreeItemCollapsibleState.Collapsed,
+        String(groupedBranches.get(prefix)?.length ?? 0),
+        branchKind,
+      );
+      item.pathPrefix = prefix;
+      item.tooltip = prefix;
+      return item;
+    });
+
+  const branchItems = directBranches.map((branch) => {
+    const displayName = branchKind === "local" ? branch.name : branch.shortName ?? branch.name;
+    const label =
+      parentPrefix && displayName.startsWith(`${parentPrefix}/`)
+        ? displayName.slice(parentPrefix.length + 1)
+        : displayName;
+
+    return createBranchItem(branch, branchKind, currentBranch, label);
+  });
+
+  return [...groupItems, ...branchItems];
+}
+
+function trimPrefix(value: string, prefix: string): string {
+  return value.startsWith(prefix) ? value.slice(prefix.length) : "";
 }

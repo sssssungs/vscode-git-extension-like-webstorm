@@ -6,6 +6,7 @@ export interface GitBranch {
   lastUpdatedAt: number | null;
   remoteName?: string;
   shortName?: string;
+  upstreamName?: string | null;
 }
 
 export interface GitBranchData {
@@ -50,7 +51,11 @@ export async function getGitBranchData(): Promise<GitBranchData> {
   const remoteName = await getPrimaryRemoteName(cwd).catch(() => null);
   const [currentBranchRaw, localRaw, remoteRaw] = await Promise.all([
     runGitCommand(cwd, ["branch", "--show-current"]),
-    runGitCommand(cwd, ["for-each-ref", "refs/heads", "--format=%(refname:short)\t%(committerdate:unix)"]),
+    runGitCommand(cwd, [
+      "for-each-ref",
+      "refs/heads",
+      "--format=%(refname:short)\t%(committerdate:unix)\t%(upstream:short)",
+    ]),
     remoteName ? runGitCommand(cwd, ["ls-remote", "--heads", remoteName]) : Promise.resolve(""),
   ]);
 
@@ -72,6 +77,20 @@ export async function getGitBranchData(): Promise<GitBranchData> {
 export async function checkoutLocalBranch(branchName: string): Promise<void> {
   const repositoryPath = await getRepositoryPath();
   await runGitCommand(repositoryPath, ["checkout", branchName]);
+}
+
+export async function createLocalBranch(
+  branchName: string,
+  sourceBranchName?: string,
+): Promise<void> {
+  const repositoryPath = await getRepositoryPath();
+  const args = ["checkout", "-b", branchName];
+
+  if (sourceBranchName) {
+    args.push(sourceBranchName);
+  }
+
+  await runGitCommand(repositoryPath, args);
 }
 
 export async function checkoutRemoteBranchAsLocal(
@@ -167,7 +186,7 @@ function normalizeBranch(value: string): GitBranch | null {
     return null;
   }
 
-  const [namePart, timestampPart] = trimmed.split("\t");
+  const [namePart, timestampPart, upstreamPart] = trimmed.split("\t");
   const name = normalizeBranchName(namePart);
   if (!name) {
     return null;
@@ -178,6 +197,7 @@ function normalizeBranch(value: string): GitBranch | null {
   return {
     name,
     lastUpdatedAt: Number.isFinite(parsedTimestamp) ? parsedTimestamp : null,
+    upstreamName: normalizeBranchName(upstreamPart ?? ""),
   };
 }
 

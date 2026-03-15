@@ -15,9 +15,14 @@
     "onView:gitBranchPanel.branchesView",
     "onCommand:gitBranchPanel.refresh",
     "onCommand:gitBranchPanel.checkoutLocalBranch",
+    "onCommand:gitBranchPanel.createLocalBranch",
     "onCommand:gitBranchPanel.checkoutRemoteBranchAsLocal",
     "onCommand:gitBranchPanel.createIndependentLocalBranchFromRemote",
     "onCommand:gitBranchPanel.changeSortOrder",
+    "onCommand:gitBranchPanel.setListView",
+    "onCommand:gitBranchPanel.setGroupedView",
+    "onCommand:gitBranchPanel.toggleToGroupedView",
+    "onCommand:gitBranchPanel.toggleToListView",
     "onCommand:gitBranchPanel.openGithubRepository",
     "onCommand:gitBranchPanel.syncRemoteBranches"
   ],
@@ -36,7 +41,7 @@
       "gitBranchPanel": [
         {
           "id": "gitBranchPanel.branchesView",
-          "name": "Local + Remote"
+          "name": "Branch picker"
         }
       ]
     },
@@ -50,6 +55,10 @@
         "title": "Checkout"
       },
       {
+        "command": "gitBranchPanel.createLocalBranch",
+        "title": "Create Local Branch..."
+      },
+      {
         "command": "gitBranchPanel.checkoutRemoteBranchAsLocal",
         "title": "Checkout as Local Branch"
       },
@@ -61,6 +70,26 @@
         "command": "gitBranchPanel.changeSortOrder",
         "title": "Sort Branches",
         "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "gitBranchPanel.setListView",
+        "title": "List View",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "gitBranchPanel.setGroupedView",
+        "title": "Grouped View",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "gitBranchPanel.toggleToGroupedView",
+        "title": "Switch to Grouped View",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "gitBranchPanel.toggleToListView",
+        "title": "Switch to List View",
+        "icon": "$(list-tree)"
       },
       {
         "command": "gitBranchPanel.openGithubRepository",
@@ -86,6 +115,16 @@
           "group": "navigation@2"
         },
         {
+          "command": "gitBranchPanel.toggleToGroupedView",
+          "when": "view == gitBranchPanel.branchesView && gitBranchPanel.viewMode == 'list'",
+          "group": "navigation@3"
+        },
+        {
+          "command": "gitBranchPanel.toggleToListView",
+          "when": "view == gitBranchPanel.branchesView && gitBranchPanel.viewMode == 'grouped'",
+          "group": "navigation@3"
+        },
+        {
           "command": "gitBranchPanel.openGithubRepository",
           "when": "view == gitBranchPanel.branchesView",
           "group": "navigation@99"
@@ -94,6 +133,11 @@
       "view/item/context": [
         {
           "command": "gitBranchPanel.checkoutLocalBranch",
+          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == currentLocalBranch)",
+          "group": "navigation"
+        },
+        {
+          "command": "gitBranchPanel.createLocalBranch",
           "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == currentLocalBranch)",
           "group": "navigation"
         },

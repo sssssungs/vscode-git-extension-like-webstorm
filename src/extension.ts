@@ -1,7 +1,12 @@
 import * as vscode from "vscode";
-import { BranchesViewProvider, type BranchSortMode } from "./branchesView";
+import {
+  BranchesViewProvider,
+  type BranchSortMode,
+  type BranchViewMode,
+} from "./branchesView";
 import {
   checkoutLocalBranch,
+  createLocalBranch,
   createIndependentLocalBranchFromRemote,
   checkoutRemoteBranchAsLocal,
   getRepositoryGithubUrl,
@@ -10,6 +15,7 @@ import {
 
 export function activate(context: vscode.ExtensionContext): void {
   const branchesViewProvider = new BranchesViewProvider();
+  void setBranchViewModeContext(branchesViewProvider.getViewMode());
 
   const treeView = vscode.window.createTreeView("gitBranchPanel.branchesView", {
     treeDataProvider: branchesViewProvider,
@@ -121,6 +127,50 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
+  const createLocalBranchCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.createLocalBranch",
+    async (item?: { branchKind?: string; fullBranchName?: string; label?: string }) => {
+      const sourceBranchName =
+        item?.branchKind === "local" ? item.fullBranchName ?? item.label : undefined;
+
+      const branchName = await vscode.window.showInputBox({
+        title: "Create Local Branch",
+        prompt: sourceBranchName
+          ? `Enter a name for the new branch based on ${sourceBranchName}`
+          : "Enter a name for the new local branch",
+        ignoreFocusOut: true,
+      });
+
+      if (branchName === undefined) {
+        return;
+      }
+
+      const trimmedBranchName = branchName.trim();
+      if (!trimmedBranchName) {
+        vscode.window.showErrorMessage("Branch name is required.");
+        return;
+      }
+
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Creating local branch ${trimmedBranchName}`,
+          },
+          async () => {
+            await createLocalBranch(trimmedBranchName, sourceBranchName);
+          },
+        );
+        vscode.window.showInformationMessage(`Created local branch: ${trimmedBranchName}`);
+        branchesViewProvider.refresh();
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to create a local branch.";
+        vscode.window.showErrorMessage(message);
+      }
+    },
+  );
+
   const changeSortOrderCommand = vscode.commands.registerCommand(
     "gitBranchPanel.changeSortOrder",
     async () => {
@@ -149,6 +199,38 @@ export function activate(context: vscode.ExtensionContext): void {
 
       branchesViewProvider.setSortMode(selected.value);
       treeView.description = branchesViewProvider.getSortDescription();
+    },
+  );
+
+  const setListViewCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.setListView",
+    async () => {
+      branchesViewProvider.setViewMode("list");
+      await setBranchViewModeContext("list");
+    },
+  );
+
+  const setGroupedViewCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.setGroupedView",
+    async () => {
+      branchesViewProvider.setViewMode("grouped");
+      await setBranchViewModeContext("grouped");
+    },
+  );
+
+  const toggleToGroupedViewCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.toggleToGroupedView",
+    async () => {
+      branchesViewProvider.setViewMode("grouped");
+      await setBranchViewModeContext("grouped");
+    },
+  );
+
+  const toggleToListViewCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.toggleToListView",
+    async () => {
+      branchesViewProvider.setViewMode("list");
+      await setBranchViewModeContext("list");
     },
   );
 
@@ -197,7 +279,12 @@ export function activate(context: vscode.ExtensionContext): void {
     checkoutLocalBranchCommand,
     checkoutRemoteBranchAsLocalCommand,
     createIndependentLocalBranchCommand,
+    createLocalBranchCommand,
     changeSortOrderCommand,
+    setListViewCommand,
+    setGroupedViewCommand,
+    toggleToGroupedViewCommand,
+    toggleToListViewCommand,
     openGithubRepositoryCommand,
     syncRemoteBranchesCommand,
     workspaceWatcher,
@@ -205,3 +292,7 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {}
+
+async function setBranchViewModeContext(viewMode: BranchViewMode): Promise<void> {
+  await vscode.commands.executeCommand("setContext", "gitBranchPanel.viewMode", viewMode);
+}
