@@ -7,6 +7,7 @@ export interface GitBranch {
   remoteName?: string;
   shortName?: string;
   upstreamName?: string | null;
+  upstreamTrackShort?: string | null;
 }
 
 export interface GitBranchData {
@@ -54,7 +55,7 @@ export async function getGitBranchData(): Promise<GitBranchData> {
     runGitCommand(cwd, [
       "for-each-ref",
       "refs/heads",
-      "--format=%(refname:short)\t%(committerdate:unix)\t%(upstream:short)",
+      "--format=%(refname:short)\t%(committerdate:unix)\t%(upstream:short)\t%(upstream:trackshort)",
     ]),
     remoteName ? runGitCommand(cwd, ["ls-remote", "--heads", remoteName]) : Promise.resolve(""),
   ]);
@@ -91,6 +92,19 @@ export async function createLocalBranch(
   }
 
   await runGitCommand(repositoryPath, args);
+}
+
+export async function pushLocalBranch(branchName: string, upstreamName?: string | null): Promise<void> {
+  const repositoryPath = await getRepositoryPath();
+
+  if (!upstreamName) {
+    const remoteName = await getPrimaryRemoteName(repositoryPath);
+    await runGitCommand(repositoryPath, ["push", "-u", remoteName, `${branchName}:${branchName}`]);
+    return;
+  }
+
+  const { remoteName, shortBranchName } = parseRemoteBranchName(upstreamName);
+  await runGitCommand(repositoryPath, ["push", remoteName, `${branchName}:${shortBranchName}`]);
 }
 
 export async function checkoutRemoteBranchAsLocal(
@@ -186,7 +200,7 @@ function normalizeBranch(value: string): GitBranch | null {
     return null;
   }
 
-  const [namePart, timestampPart, upstreamPart] = trimmed.split("\t");
+  const [namePart, timestampPart, upstreamPart, upstreamTrackPart] = trimmed.split("\t");
   const name = normalizeBranchName(namePart);
   if (!name) {
     return null;
@@ -198,6 +212,7 @@ function normalizeBranch(value: string): GitBranch | null {
     name,
     lastUpdatedAt: Number.isFinite(parsedTimestamp) ? parsedTimestamp : null,
     upstreamName: normalizeBranchName(upstreamPart ?? ""),
+    upstreamTrackShort: normalizeBranchName(upstreamTrackPart ?? ""),
   };
 }
 

@@ -16,6 +16,7 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
   >();
   private sortMode: BranchSortMode = "updated";
   private viewMode: BranchViewMode = "list";
+  private prioritizeDisconnectedBranches = true;
 
   readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
 
@@ -45,6 +46,15 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     return this.viewMode;
   }
 
+  setPrioritizeDisconnectedBranches(enabled: boolean): void {
+    this.prioritizeDisconnectedBranches = enabled;
+    this.refresh();
+  }
+
+  getPrioritizeDisconnectedBranches(): boolean {
+    return this.prioritizeDisconnectedBranches;
+  }
+
   getTreeItem(element: BranchTreeItem): vscode.TreeItem {
     return element;
   }
@@ -68,7 +78,6 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
           data.repositoryName,
           "repository",
           vscode.TreeItemCollapsibleState.Expanded,
-          data.repositoryPath,
         ),
       ];
     }
@@ -96,7 +105,12 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     if (element.nodeType === "group") {
       const isLocalBranchGroup = element.label === LOCAL_BRANCHES_LABEL;
       const branches = isLocalBranchGroup
-        ? sortLocalBranches(data.localBranches, data.currentBranch, this.sortMode)
+        ? sortLocalBranches(
+            data.localBranches,
+            data.currentBranch,
+            this.sortMode,
+            this.prioritizeDisconnectedBranches,
+          )
         : sortBranches(data.remoteBranches, this.sortMode);
 
       if (branches.length === 0) {
@@ -139,7 +153,12 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
       const branchKind = element.branchKind === "local" ? "local" : "remote";
       const isLocalBranchGroup = branchKind === "local";
       const branches = isLocalBranchGroup
-        ? sortLocalBranches(data.localBranches, data.currentBranch, this.sortMode)
+        ? sortLocalBranches(
+            data.localBranches,
+            data.currentBranch,
+            this.sortMode,
+            this.prioritizeDisconnectedBranches,
+          )
         : sortBranches(data.remoteBranches, this.sortMode);
 
       return buildGroupedBranchItems(
@@ -158,6 +177,8 @@ class BranchTreeItem extends vscode.TreeItem {
   public fullBranchName?: string;
   public pathPrefix?: string;
   public hasUpstream?: boolean;
+  public upstreamName?: string | null;
+  public needsPush?: boolean;
 
   constructor(
     public readonly label: string,
@@ -210,16 +231,19 @@ function sortLocalBranches(
   branches: GitBranch[],
   currentBranch: string | null,
   sortMode: BranchSortMode,
+  prioritizeDisconnectedBranches: boolean,
 ): GitBranch[] {
   if (!currentBranch) {
-    return sortBranches(branches, sortMode);
+    return prioritizeDisconnectedBranches
+      ? sortBranchesWithDisconnectedFirst(branches, sortMode)
+      : sortBranches(branches, sortMode);
   }
 
   const currentBranches = branches.filter((branch) => branch.name === currentBranch);
-  const otherBranches = sortBranches(
-    branches.filter((branch) => branch.name !== currentBranch),
-    sortMode,
-  );
+  const remainingBranches = branches.filter((branch) => branch.name !== currentBranch);
+  const otherBranches = prioritizeDisconnectedBranches
+    ? sortBranchesWithDisconnectedFirst(remainingBranches, sortMode)
+    : sortBranches(remainingBranches, sortMode);
   return [...currentBranches, ...otherBranches];
 }
 
@@ -245,6 +269,19 @@ function sortBranches(
   });
 
   return sortedBranches;
+}
+
+function sortBranchesWithDisconnectedFirst(
+  branches: GitBranch[],
+  sortMode: BranchSortMode,
+): GitBranch[] {
+  const disconnectedBranches = branches.filter((branch) => !branch.upstreamName);
+  const connectedBranches = branches.filter((branch) => branch.upstreamName);
+
+  return [
+    ...sortBranches(disconnectedBranches, sortMode),
+    ...sortBranches(connectedBranches, sortMode),
+  ];
 }
 
 function buildBranchTooltip(branch: GitBranch): string {
@@ -278,7 +315,6 @@ function createBranchItem(
 
   if (branchKind === "local" && branch.name === currentBranch) {
     item.contextValue = "currentLocalBranch";
-    item.description = "✨";
     item.fullBranchName = branch.name;
   } else if (branchKind === "local") {
     item.contextValue = "localBranch";
@@ -289,6 +325,28 @@ function createBranchItem(
   }
 
   item.hasUpstream = branchKind === "local" ? Boolean(branch.upstreamName) : true;
+  item.upstreamName = branch.upstreamName;
+  item.needsPush = branchKind === "local" ? needsPush(branch) : false;
+
+  if (branchKind === "local" && item.needsPush) {
+    item.contextValue =
+      branch.name === currentBranch ? "currentPushableLocalBranch" : "pushableLocalBranch";
+  }
+
+  if (branchKind === "local") {
+    const markers: string[] = [];
+
+    if (branch.name === currentBranch) {
+      markers.push("✨");
+    }
+
+    if (item.needsPush) {
+      markers.push("☝️");
+    }
+
+    item.description = markers.join(" ");
+  }
+
   item.iconPath =
     branchKind === "local" && !item.hasUpstream
       ? {
@@ -359,4 +417,12 @@ function buildGroupedBranchItems(
 
 function trimPrefix(value: string, prefix: string): string {
   return value.startsWith(prefix) ? value.slice(prefix.length) : "";
+}
+
+function needsPush(branch: GitBranch): boolean {
+  if (!branch.upstreamName) {
+    return true;
+  }
+
+  return branch.upstreamTrackShort?.includes(">") ?? false;
 }

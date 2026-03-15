@@ -10,12 +10,14 @@ import {
   createIndependentLocalBranchFromRemote,
   checkoutRemoteBranchAsLocal,
   getRepositoryGithubUrl,
+  pushLocalBranch,
   syncRemoteBranches,
 } from "./git";
 
 export function activate(context: vscode.ExtensionContext): void {
   const branchesViewProvider = new BranchesViewProvider();
   void setBranchViewModeContext(branchesViewProvider.getViewMode());
+  void setDisconnectedSortContext(branchesViewProvider.getPrioritizeDisconnectedBranches());
 
   const treeView = vscode.window.createTreeView("gitBranchPanel.branchesView", {
     treeDataProvider: branchesViewProvider,
@@ -83,8 +85,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
       const fullBranchName = item.fullBranchName;
       const customBranchName = await vscode.window.showInputBox({
-        title: "Create Local Branch",
-        prompt: "Enter a name for the new local branch",
+        title: "New Branch from Selected Branch",
+        prompt: `Enter a name for the new branch based on ${fullBranchName}`,
         value: item.label,
         ignoreFocusOut: true,
       });
@@ -134,7 +136,7 @@ export function activate(context: vscode.ExtensionContext): void {
         item?.branchKind === "local" ? item.fullBranchName ?? item.label : undefined;
 
       const branchName = await vscode.window.showInputBox({
-        title: "Create Local Branch",
+        title: "New Branch from Selected Branch",
         prompt: sourceBranchName
           ? `Enter a name for the new branch based on ${sourceBranchName}`
           : "Enter a name for the new local branch",
@@ -171,6 +173,44 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
+  const pushLocalBranchCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.pushLocalBranch",
+    async (item?: {
+      branchKind?: string;
+      fullBranchName?: string;
+      label?: string;
+      upstreamName?: string | null;
+    }) => {
+      if (item?.branchKind !== "local") {
+        return;
+      }
+
+      const branchName = item.fullBranchName ?? item.label;
+      if (!branchName) {
+        return;
+      }
+
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Pushing ${branchName}`,
+          },
+          async () => {
+            await pushLocalBranch(branchName, item.upstreamName);
+            await syncRemoteBranches();
+          },
+        );
+        vscode.window.showInformationMessage(`Pushed local branch: ${branchName}`);
+        branchesViewProvider.refresh();
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to push local branch.";
+        vscode.window.showErrorMessage(message);
+      }
+    },
+  );
+
   const changeSortOrderCommand = vscode.commands.registerCommand(
     "gitBranchPanel.changeSortOrder",
     async () => {
@@ -199,6 +239,31 @@ export function activate(context: vscode.ExtensionContext): void {
 
       branchesViewProvider.setSortMode(selected.value);
       treeView.description = branchesViewProvider.getSortDescription();
+    },
+  );
+
+  const toggleDisconnectedSortCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.toggleDisconnectedFirst",
+    async () => {
+      const nextValue = !branchesViewProvider.getPrioritizeDisconnectedBranches();
+      branchesViewProvider.setPrioritizeDisconnectedBranches(nextValue);
+      await setDisconnectedSortContext(nextValue);
+    },
+  );
+
+  const enableDisconnectedSortCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.enableDisconnectedFirst",
+    async () => {
+      branchesViewProvider.setPrioritizeDisconnectedBranches(true);
+      await setDisconnectedSortContext(true);
+    },
+  );
+
+  const disableDisconnectedSortCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.disableDisconnectedFirst",
+    async () => {
+      branchesViewProvider.setPrioritizeDisconnectedBranches(false);
+      await setDisconnectedSortContext(false);
     },
   );
 
@@ -280,7 +345,11 @@ export function activate(context: vscode.ExtensionContext): void {
     checkoutRemoteBranchAsLocalCommand,
     createIndependentLocalBranchCommand,
     createLocalBranchCommand,
+    pushLocalBranchCommand,
     changeSortOrderCommand,
+    toggleDisconnectedSortCommand,
+    enableDisconnectedSortCommand,
+    disableDisconnectedSortCommand,
     setListViewCommand,
     setGroupedViewCommand,
     toggleToGroupedViewCommand,
@@ -295,4 +364,12 @@ export function deactivate(): void {}
 
 async function setBranchViewModeContext(viewMode: BranchViewMode): Promise<void> {
   await vscode.commands.executeCommand("setContext", "gitBranchPanel.viewMode", viewMode);
+}
+
+async function setDisconnectedSortContext(enabled: boolean): Promise<void> {
+  await vscode.commands.executeCommand(
+    "setContext",
+    "gitBranchPanel.disconnectedFirst",
+    enabled,
+  );
 }
