@@ -16,6 +16,7 @@
     "onCommand:gitBranchPanel.refresh",
     "onCommand:gitBranchPanel.checkoutLocalBranch",
     "onCommand:gitBranchPanel.checkoutRemoteBranchAsLocal",
+    "onCommand:gitBranchPanel.createIndependentLocalBranchFromRemote",
     "onCommand:gitBranchPanel.changeSortOrder",
     "onCommand:gitBranchPanel.openGithubRepository",
     "onCommand:gitBranchPanel.syncRemoteBranches"
@@ -51,6 +52,10 @@
       {
         "command": "gitBranchPanel.checkoutRemoteBranchAsLocal",
         "title": "Checkout as Local Branch"
+      },
+      {
+        "command": "gitBranchPanel.createIndependentLocalBranchFromRemote",
+        "title": "Create Local Branch..."
       },
       {
         "command": "gitBranchPanel.changeSortOrder",
@@ -96,6 +101,11 @@
           "command": "gitBranchPanel.checkoutRemoteBranchAsLocal",
           "when": "view == gitBranchPanel.branchesView && viewItem == remoteBranch",
           "group": "navigation"
+        },
+        {
+          "command": "gitBranchPanel.createIndependentLocalBranchFromRemote",
+          "when": "view == gitBranchPanel.branchesView && viewItem == remoteBranch",
+          "group": "navigation@2"
         },
         {
           "command": "gitBranchPanel.syncRemoteBranches",

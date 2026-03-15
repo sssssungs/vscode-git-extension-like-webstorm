@@ -79,12 +79,40 @@ export async function checkoutRemoteBranchAsLocal(
   localBranchName: string,
 ): Promise<void> {
   const repositoryPath = await getRepositoryPath();
+  const { remoteName, shortBranchName } = parseRemoteBranchName(remoteBranchName);
+
+  await runGitCommand(repositoryPath, [
+    "fetch",
+    remoteName,
+    `refs/heads/${shortBranchName}:refs/remotes/${remoteName}/${shortBranchName}`,
+  ]);
   await runGitCommand(repositoryPath, [
     "checkout",
     "-b",
     localBranchName,
     "--track",
-    remoteBranchName,
+    `refs/remotes/${remoteName}/${shortBranchName}`,
+  ]);
+}
+
+export async function createIndependentLocalBranchFromRemote(
+  remoteBranchName: string,
+  localBranchName: string,
+): Promise<void> {
+  const repositoryPath = await getRepositoryPath();
+  const { remoteName, shortBranchName } = parseRemoteBranchName(remoteBranchName);
+
+  await runGitCommand(repositoryPath, [
+    "fetch",
+    remoteName,
+    `refs/heads/${shortBranchName}`,
+  ]);
+  await runGitCommand(repositoryPath, [
+    "checkout",
+    "--no-track",
+    "-b",
+    localBranchName,
+    "FETCH_HEAD",
   ]);
 }
 
@@ -196,6 +224,20 @@ function normalizeGithubUrl(remoteUrl: string): string | null {
   }
 
   return null;
+}
+
+function parseRemoteBranchName(remoteBranchName: string): {
+  remoteName: string;
+  shortBranchName: string;
+} {
+  const [remoteName, ...branchParts] = remoteBranchName.split("/");
+  const shortBranchName = branchParts.join("/");
+
+  if (!remoteName || !shortBranchName) {
+    throw new Error(`Invalid remote branch name: ${remoteBranchName}`);
+  }
+
+  return { remoteName, shortBranchName };
 }
 
 async function getRepositoryPath(): Promise<string> {

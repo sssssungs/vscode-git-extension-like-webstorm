@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { BranchesViewProvider, type BranchSortMode } from "./branchesView";
 import {
   checkoutLocalBranch,
+  createIndependentLocalBranchFromRemote,
   checkoutRemoteBranchAsLocal,
   getRepositoryGithubUrl,
   syncRemoteBranches,
@@ -62,6 +63,59 @@ export function activate(context: vscode.ExtensionContext): void {
           error instanceof Error
             ? error.message
             : "Failed to create a local branch from the remote branch.";
+        vscode.window.showErrorMessage(message);
+      }
+    },
+  );
+
+  const createIndependentLocalBranchCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.createIndependentLocalBranchFromRemote",
+    async (item?: { label?: string; branchKind?: string; fullBranchName?: string }) => {
+      if (!item?.label || item.branchKind !== "remote" || !item.fullBranchName) {
+        return;
+      }
+
+      const fullBranchName = item.fullBranchName;
+      const customBranchName = await vscode.window.showInputBox({
+        title: "Create Local Branch",
+        prompt: "Enter a name for the new local branch",
+        value: item.label,
+        ignoreFocusOut: true,
+      });
+
+      if (customBranchName === undefined) {
+        return;
+      }
+
+      const localBranchName = customBranchName.trim();
+
+      if (!localBranchName) {
+        vscode.window.showErrorMessage("Branch name is required.");
+        return;
+      }
+
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Creating local branch ${localBranchName}`,
+          },
+          async () => {
+            await createIndependentLocalBranchFromRemote(
+              fullBranchName,
+              localBranchName,
+            );
+          },
+        );
+        vscode.window.showInformationMessage(
+          `Created local branch: ${localBranchName}`,
+        );
+        branchesViewProvider.refresh();
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to create an independent local branch.";
         vscode.window.showErrorMessage(message);
       }
     },
@@ -142,6 +196,7 @@ export function activate(context: vscode.ExtensionContext): void {
     refreshCommand,
     checkoutLocalBranchCommand,
     checkoutRemoteBranchAsLocalCommand,
+    createIndependentLocalBranchCommand,
     changeSortOrderCommand,
     openGithubRepositoryCommand,
     syncRemoteBranchesCommand,
