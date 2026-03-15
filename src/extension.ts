@@ -1,6 +1,11 @@
 import * as vscode from "vscode";
 import { BranchesViewProvider, type BranchSortMode } from "./branchesView";
-import { checkoutLocalBranch, getRepositoryGithubUrl } from "./git";
+import {
+  checkoutLocalBranch,
+  checkoutRemoteBranchAsLocal,
+  getRepositoryGithubUrl,
+  syncRemoteBranches,
+} from "./git";
 
 export function activate(context: vscode.ExtensionContext): void {
   const branchesViewProvider = new BranchesViewProvider();
@@ -34,6 +39,29 @@ export function activate(context: vscode.ExtensionContext): void {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to checkout branch.";
+        vscode.window.showErrorMessage(message);
+      }
+    },
+  );
+
+  const checkoutRemoteBranchAsLocalCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.checkoutRemoteBranchAsLocal",
+    async (item?: { label?: string; branchKind?: string; fullBranchName?: string }) => {
+      if (!item?.label || item.branchKind !== "remote" || !item.fullBranchName) {
+        return;
+      }
+
+      try {
+        await checkoutRemoteBranchAsLocal(item.fullBranchName, item.label);
+        vscode.window.showInformationMessage(
+          `Created and checked out local branch: ${item.label}`,
+        );
+        branchesViewProvider.refresh();
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to create a local branch from the remote branch.";
         vscode.window.showErrorMessage(message);
       }
     },
@@ -86,6 +114,25 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
+  const syncRemoteBranchesCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.syncRemoteBranches",
+    async () => {
+      try {
+        const remoteName = await syncRemoteBranches();
+        vscode.window.showInformationMessage(
+          `Synced remote branches from ${remoteName}.`,
+        );
+        branchesViewProvider.refresh();
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to sync remote branches.";
+        vscode.window.showErrorMessage(message);
+      }
+    },
+  );
+
   const workspaceWatcher = vscode.workspace.onDidChangeWorkspaceFolders(() => {
     branchesViewProvider.refresh();
   });
@@ -94,8 +141,10 @@ export function activate(context: vscode.ExtensionContext): void {
     treeView,
     refreshCommand,
     checkoutLocalBranchCommand,
+    checkoutRemoteBranchAsLocalCommand,
     changeSortOrderCommand,
     openGithubRepositoryCommand,
+    syncRemoteBranchesCommand,
     workspaceWatcher,
   );
 }

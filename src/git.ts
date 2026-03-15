@@ -11,6 +11,7 @@ export interface GitBranch {
 export interface GitBranchData {
   repositoryName: string | null;
   repositoryPath: string | null;
+  remoteName: string | null;
   currentBranch: string | null;
   localBranches: GitBranch[];
   remoteBranches: GitBranch[];
@@ -22,6 +23,7 @@ export async function getGitBranchData(): Promise<GitBranchData> {
     return {
       repositoryName: null,
       repositoryPath: null,
+      remoteName: null,
       currentBranch: null,
       localBranches: [],
       remoteBranches: [],
@@ -38,26 +40,32 @@ export async function getGitBranchData(): Promise<GitBranchData> {
     return {
       repositoryName: null,
       repositoryPath: null,
+      remoteName: null,
       currentBranch: null,
       localBranches: [],
       remoteBranches: [],
     };
   }
 
+  const remoteName = await getPrimaryRemoteName(cwd).catch(() => null);
   const [currentBranchRaw, localRaw, remoteRaw] = await Promise.all([
     runGitCommand(cwd, ["branch", "--show-current"]),
     runGitCommand(cwd, ["for-each-ref", "refs/heads", "--format=%(refname:short)\t%(committerdate:unix)"]),
-    runGitCommand(cwd, ["for-each-ref", "refs/remotes", "--format=%(refname:short)\t%(committerdate:unix)"])
+    remoteName ? runGitCommand(cwd, ["ls-remote", "--heads", remoteName]) : Promise.resolve(""),
   ]);
+
+  const localBranches = normalizeBranchList(localRaw);
+  const remoteBranches = normalizeRemoteBranchList(remoteRaw, remoteName).filter(
+    (branch) => !branch.name.endsWith("/HEAD")
+  );
 
   return {
     repositoryName: workspaceFolder.name,
     repositoryPath: cwd,
+    remoteName,
     currentBranch: normalizeBranchName(currentBranchRaw) ?? null,
-    localBranches: normalizeBranchList(localRaw),
-    remoteBranches: normalizeRemoteBranchList(remoteRaw).filter(
-      (branch) => !branch.name.endsWith("/HEAD")
-    )
+    localBranches,
+    remoteBranches,
   };
 }
 
@@ -66,14 +74,29 @@ export async function checkoutLocalBranch(branchName: string): Promise<void> {
   await runGitCommand(repositoryPath, ["checkout", branchName]);
 }
 
+export async function checkoutRemoteBranchAsLocal(
+  remoteBranchName: string,
+  localBranchName: string,
+): Promise<void> {
+  const repositoryPath = await getRepositoryPath();
+  await runGitCommand(repositoryPath, [
+    "checkout",
+    "-b",
+    localBranchName,
+    "--track",
+    remoteBranchName,
+  ]);
+}
+
 export async function getRepositoryGithubUrl(): Promise<string> {
   const repositoryPath = await getRepositoryPath();
+  const remoteName = await getPrimaryRemoteName(repositoryPath);
   const remoteUrl = normalizeBranchName(
-    await runGitCommand(repositoryPath, ["remote", "get-url", "origin"]),
+    await runGitCommand(repositoryPath, ["remote", "get-url", remoteName]),
   );
 
   if (!remoteUrl) {
-    throw new Error("No origin remote is configured for this repository.");
+    throw new Error("No remote is configured for this repository.");
   }
 
   const githubUrl = normalizeGithubUrl(remoteUrl);
@@ -84,6 +107,13 @@ export async function getRepositoryGithubUrl(): Promise<string> {
   return githubUrl;
 }
 
+export async function syncRemoteBranches(): Promise<string> {
+  const repositoryPath = await getRepositoryPath();
+  const remoteName = await getPrimaryRemoteName(repositoryPath);
+  await runGitCommand(repositoryPath, ["ls-remote", "--heads", remoteName]);
+  return remoteName;
+}
+
 function normalizeBranchList(output: string): GitBranch[] {
   return output
     .split("\n")
@@ -91,21 +121,11 @@ function normalizeBranchList(output: string): GitBranch[] {
     .filter((branch): branch is GitBranch => Boolean(branch));
 }
 
-function normalizeRemoteBranchList(output: string): GitBranch[] {
+function normalizeRemoteBranchList(output: string, remoteName: string | null): GitBranch[] {
   return output
     .split("\n")
-    .map((line) => normalizeBranch(line))
+    .map((line) => normalizeRemoteBranch(line, remoteName))
     .filter((branch): branch is GitBranch => Boolean(branch))
-    .map((branch) => {
-      const [remoteName, ...rest] = branch.name.split("/");
-      const shortName = rest.join("/");
-
-      return {
-        ...branch,
-        remoteName: remoteName || undefined,
-        shortName: shortName || branch.name,
-      };
-    });
 }
 
 function normalizeBranchName(value: string): string | null {
@@ -132,6 +152,32 @@ function normalizeBranch(value: string): GitBranch | null {
     lastUpdatedAt: Number.isFinite(parsedTimestamp) ? parsedTimestamp : null,
   };
 }
+
+function normalizeRemoteBranch(value: string, remoteName: string | null): GitBranch | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parts = trimmed.split(/\s+/);
+  const refName = parts[1];
+  const prefix = "refs/heads/";
+
+  if (!refName?.startsWith(prefix)) {
+    return null;
+  }
+
+  const shortName = refName.slice(prefix.length);
+  const fullName = remoteName ? `${remoteName}/${shortName}` : shortName;
+
+  return {
+    name: fullName,
+    shortName,
+    remoteName: remoteName ?? undefined,
+    lastUpdatedAt: null,
+  };
+}
+
 
 function normalizeGithubUrl(remoteUrl: string): string | null {
   if (remoteUrl.startsWith("git@github.com:")) {
@@ -168,6 +214,20 @@ async function getRepositoryPath(): Promise<string> {
   }
 
   return cwd;
+}
+
+async function getPrimaryRemoteName(repositoryPath: string): Promise<string> {
+  const remoteOutput = await runGitCommand(repositoryPath, ["remote"]);
+  const remoteNames = remoteOutput
+    .split("\n")
+    .map((name) => normalizeBranchName(name))
+    .filter((name): name is string => Boolean(name));
+
+  if (remoteNames.length === 0) {
+    throw new Error("No remote is configured for this repository.");
+  }
+
+  return remoteNames.includes("origin") ? "origin" : remoteNames[0];
 }
 
 function runGitCommand(cwd: string, args: string[]): Promise<string> {

@@ -15,8 +15,10 @@
     "onView:gitBranchPanel.branchesView",
     "onCommand:gitBranchPanel.refresh",
     "onCommand:gitBranchPanel.checkoutLocalBranch",
+    "onCommand:gitBranchPanel.checkoutRemoteBranchAsLocal",
     "onCommand:gitBranchPanel.changeSortOrder",
-    "onCommand:gitBranchPanel.openGithubRepository"
+    "onCommand:gitBranchPanel.openGithubRepository",
+    "onCommand:gitBranchPanel.syncRemoteBranches"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -47,6 +49,10 @@
         "title": "Checkout"
       },
       {
+        "command": "gitBranchPanel.checkoutRemoteBranchAsLocal",
+        "title": "Checkout as Local Branch"
+      },
+      {
         "command": "gitBranchPanel.changeSortOrder",
         "title": "Sort Branches",
         "icon": "$(sort-precedence)"
@@ -55,6 +61,11 @@
         "command": "gitBranchPanel.openGithubRepository",
         "title": "Open GitHub Repository",
         "icon": "$(link-external)"
+      },
+      {
+        "command": "gitBranchPanel.syncRemoteBranches",
+        "title": "Sync Remote Branches",
+        "icon": "$(sync)"
       }
     ],
     "menus": {
@@ -80,6 +91,16 @@
           "command": "gitBranchPanel.checkoutLocalBranch",
           "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == currentLocalBranch)",
           "group": "navigation"
+        },
+        {
+          "command": "gitBranchPanel.checkoutRemoteBranchAsLocal",
+          "when": "view == gitBranchPanel.branchesView && viewItem == remoteBranch",
+          "group": "navigation"
+        },
+        {
+          "command": "gitBranchPanel.syncRemoteBranches",
+          "when": "view == gitBranchPanel.branchesView && viewItem == remoteGroup",
+          "group": "inline"
         }
       ]
     }

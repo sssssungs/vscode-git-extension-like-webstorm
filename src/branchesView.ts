@@ -63,20 +63,23 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     }
 
     if (element.nodeType === "repository") {
-      const remoteLabel = getRemoteGroupLabel(data.remoteBranches);
+      const remoteLabel = getRemoteGroupLabel(data.remoteName);
 
-      return [
-        new BranchTreeItem(
-          LOCAL_BRANCHES_LABEL,
-          "group",
-          vscode.TreeItemCollapsibleState.Expanded,
-        ),
-        new BranchTreeItem(
-          remoteLabel,
-          "group",
-          vscode.TreeItemCollapsibleState.Expanded,
-        ),
-      ];
+      const localGroup = new BranchTreeItem(
+        LOCAL_BRANCHES_LABEL,
+        "group",
+        vscode.TreeItemCollapsibleState.Expanded,
+      );
+      localGroup.contextValue = "localGroup";
+
+      const remoteGroup = new BranchTreeItem(
+        remoteLabel,
+        "group",
+        vscode.TreeItemCollapsibleState.Expanded,
+      );
+      remoteGroup.contextValue = "remoteGroup";
+
+      return [localGroup, remoteGroup];
     }
 
     if (element.nodeType === "group") {
@@ -111,6 +114,7 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
           item.contextValue = "localBranch";
         } else {
           item.contextValue = "remoteBranch";
+          item.fullBranchName = branch.name;
         }
 
         item.tooltip = buildBranchTooltip(branch);
@@ -123,6 +127,8 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
 }
 
 class BranchTreeItem extends vscode.TreeItem {
+  public fullBranchName?: string;
+
   constructor(
     public readonly label: string,
     public readonly nodeType: BranchNodeType,
@@ -215,7 +221,6 @@ function buildBranchTooltip(branch: GitBranch): string {
   return `${branch.name}\nUpdated: ${updatedAt}`;
 }
 
-function getRemoteGroupLabel(branches: GitBranch[]): string {
-  const remoteName = branches[0]?.remoteName;
+function getRemoteGroupLabel(remoteName: string | null): string {
   return remoteName ? `${REMOTE_BRANCHES_LABEL} (${remoteName})` : REMOTE_BRANCHES_LABEL;
 }
