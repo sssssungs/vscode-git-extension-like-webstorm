@@ -13,7 +13,10 @@
   ],
   "activationEvents": [
     "onView:gitBranchPanel.branchesView",
-    "onCommand:gitBranchPanel.refresh"
+    "onCommand:gitBranchPanel.refresh",
+    "onCommand:gitBranchPanel.checkoutLocalBranch",
+    "onCommand:gitBranchPanel.changeSortOrder",
+    "onCommand:gitBranchPanel.openGithubRepository"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -38,6 +41,20 @@
       {
         "command": "gitBranchPanel.refresh",
         "title": "Git Branch Panel: Refresh"
+      },
+      {
+        "command": "gitBranchPanel.checkoutLocalBranch",
+        "title": "Checkout"
+      },
+      {
+        "command": "gitBranchPanel.changeSortOrder",
+        "title": "Sort Branches",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "gitBranchPanel.openGithubRepository",
+        "title": "Open GitHub Repository",
+        "icon": "$(link-external)"
       }
     ],
     "menus": {
@@ -45,6 +62,23 @@
         {
           "command": "gitBranchPanel.refresh",
           "when": "view == gitBranchPanel.branchesView",
+          "group": "navigation"
+        },
+        {
+          "command": "gitBranchPanel.changeSortOrder",
+          "when": "view == gitBranchPanel.branchesView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitBranchPanel.openGithubRepository",
+          "when": "view == gitBranchPanel.branchesView",
+          "group": "navigation@99"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gitBranchPanel.checkoutLocalBranch",
+          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == currentLocalBranch)",
           "group": "navigation"
         }
       ]
