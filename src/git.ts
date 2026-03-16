@@ -7,7 +7,8 @@ export interface GitBranch {
   remoteName?: string;
   shortName?: string;
   upstreamName?: string | null;
-  upstreamTrackShort?: string | null;
+  aheadCount?: number;
+  behindCount?: number;
 }
 
 export interface GitBranchData {
@@ -64,7 +65,7 @@ export async function getGitBranchData(): Promise<GitBranchData> {
     runGitCommand(cwd, [
       "for-each-ref",
       "refs/heads",
-      "--format=%(refname:short)\t%(committerdate:unix)\t%(upstream:short)\t%(upstream:trackshort)",
+      "--format=%(refname:short)\t%(committerdate:unix)\t%(upstream:short)\t%(upstream:track)",
     ]),
   ]);
   const remoteResult = remoteName
@@ -251,12 +252,14 @@ function normalizeBranch(value: string): GitBranch | null {
   }
 
   const parsedTimestamp = Number.parseInt(timestampPart ?? "", 10);
+  const { aheadCount, behindCount } = parseUpstreamTrack(upstreamTrackPart ?? "");
 
   return {
     name,
     lastUpdatedAt: Number.isFinite(parsedTimestamp) ? parsedTimestamp : null,
     upstreamName: normalizeBranchName(upstreamPart ?? ""),
-    upstreamTrackShort: normalizeBranchName(upstreamTrackPart ?? ""),
+    aheadCount,
+    behindCount,
   };
 }
 
@@ -282,6 +285,25 @@ function normalizeRemoteBranch(value: string, remoteName: string | null): GitBra
     shortName,
     remoteName: remoteName ?? undefined,
     lastUpdatedAt: null,
+  };
+}
+
+function parseUpstreamTrack(value: string): {
+  aheadCount: number;
+  behindCount: number;
+} {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue || normalizedValue === "[gone]") {
+    return { aheadCount: 0, behindCount: 0 };
+  }
+
+  const aheadMatch = normalizedValue.match(/ahead (\d+)/);
+  const behindMatch = normalizedValue.match(/behind (\d+)/);
+
+  return {
+    aheadCount: aheadMatch ? Number.parseInt(aheadMatch[1], 10) : 0,
+    behindCount: behindMatch ? Number.parseInt(behindMatch[1], 10) : 0,
   };
 }
 

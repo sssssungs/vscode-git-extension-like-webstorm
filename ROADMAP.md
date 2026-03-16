@@ -50,11 +50,11 @@
 - cherry pick (commit 별, commit 내부 파일별)
 - merge 진입점 추가
 - default branch로 빠르게 이동하는 액션 추가
-- upstream / ahead / behind 상태를 더 명확하게 시각화
 
 완료:
 
 - branch rename
+- upstream / ahead / behind 상태 시각화
 
 ### v1.0
 

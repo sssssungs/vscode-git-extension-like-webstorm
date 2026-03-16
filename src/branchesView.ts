@@ -436,13 +436,14 @@ function buildBranchTooltip(branch: GitBranch): string {
   const upstreamLine = branch.upstreamName
     ? `\nUpstream: ${branch.upstreamName}`
     : "\nUpstream: none";
+  const aheadBehindLine = buildAheadBehindTooltip(branch);
 
   if (!branch.lastUpdatedAt) {
-    return `${branch.name}${upstreamLine}`;
+    return `${branch.name}${upstreamLine}${aheadBehindLine}`;
   }
 
   const updatedAt = new Date(branch.lastUpdatedAt * 1000).toLocaleString();
-  return `${branch.name}\nUpdated: ${updatedAt}${upstreamLine}`;
+  return `${branch.name}\nUpdated: ${updatedAt}${upstreamLine}${aheadBehindLine}`;
 }
 
 function getRemoteGroupLabel(remoteName: string | null): string {
@@ -498,6 +499,7 @@ function createBranchItem(
 
   if (branchKind === "local") {
     const markers: string[] = [];
+    const statusParts: string[] = [];
 
     if (branch.name === currentBranch) {
       markers.push("✨");
@@ -511,6 +513,18 @@ function createBranchItem(
 
     if (branch.upstreamName) {
       descriptionParts.push(`🞵 ${branch.upstreamName}`);
+    }
+
+    if (branch.aheadCount) {
+      statusParts.push(`↑${branch.aheadCount}`);
+    }
+
+    if (branch.behindCount) {
+      statusParts.push(`↓${branch.behindCount}`);
+    }
+
+    if (statusParts.length > 0) {
+      descriptionParts.push(statusParts.join(" "));
     }
 
     if (markers.length > 0) {
@@ -621,7 +635,25 @@ function needsPush(branch: GitBranch): boolean {
     return true;
   }
 
-  return branch.upstreamTrackShort?.includes(">") ?? false;
+  return (branch.aheadCount ?? 0) > 0;
+}
+
+function buildAheadBehindTooltip(branch: GitBranch): string {
+  const parts: string[] = [];
+
+  if (branch.aheadCount) {
+    parts.push(`Ahead: ${branch.aheadCount}`);
+  }
+
+  if (branch.behindCount) {
+    parts.push(`Behind: ${branch.behindCount}`);
+  }
+
+  if (parts.length === 0) {
+    return "";
+  }
+
+  return `\n${parts.join("\n")}`;
 }
 
 function getEmptyBranchMessage(branchKind: "local" | "remote"): string {

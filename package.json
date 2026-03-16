@@ -54,100 +54,100 @@
     "commands": [
       {
         "command": "gitBranchPanel.refresh",
-        "title": "Git Branch Panel: Refresh",
+        "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
         "command": "gitBranchPanel.checkoutLocalBranch",
-        "title": "Git Branch Panel: Checkout Branch",
+        "title": "Checkout Branch",
         "icon": "$(play)"
       },
       {
         "command": "gitBranchPanel.createLocalBranch",
-        "title": "Git Branch Panel: Create Local Branch"
+        "title": "Create Local Branch"
       },
       {
         "command": "gitBranchPanel.pushLocalBranch",
-        "title": "Git Branch Panel: Push Branch",
+        "title": "Push Branch",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "gitBranchPanel.renameLocalBranch",
-        "title": "Git Branch Panel: Rename Branch",
+        "title": "Rename Branch",
         "icon": "$(edit)"
       },
       {
         "command": "gitBranchPanel.deleteLocalBranch",
-        "title": "Git Branch Panel: Delete Branch",
+        "title": "Delete Branch",
         "icon": "$(trash)"
       },
       {
         "command": "gitBranchPanel.checkoutRemoteBranchAsLocal",
-        "title": "Git Branch Panel: Checkout Remote as Local Branch"
+        "title": "Checkout Remote as Local Branch"
       },
       {
         "command": "gitBranchPanel.createIndependentLocalBranchFromRemote",
-        "title": "Git Branch Panel: Create Local Branch from Remote",
+        "title": "Create Local Branch from Remote",
         "icon": "$(git-branch-create)"
       },
       {
         "command": "gitBranchPanel.changeSortOrder",
-        "title": "Git Branch Panel: Change Sort Order",
+        "title": "Change Sort Order",
         "icon": "$(sort-precedence)"
       },
       {
         "command": "gitBranchPanel.searchBranches",
-        "title": "Git Branch Panel: Search Branches",
+        "title": "Search Branches",
         "icon": "$(search)"
       },
       {
         "command": "gitBranchPanel.clearBranchSearch",
-        "title": "Git Branch Panel: Clear Branch Search",
+        "title": "Clear Branch Search",
         "icon": "$(close)"
       },
       {
         "command": "gitBranchPanel.toggleDisconnectedFirst",
-        "title": "Git Branch Panel: Toggle Disconnected First",
+        "title": "Toggle Disconnected First",
         "icon": "$(plug)"
       },
       {
         "command": "gitBranchPanel.enableDisconnectedFirst",
-        "title": "Git Branch Panel: Enable Disconnected First",
+        "title": "Enable Disconnected First",
         "icon": "$(plug)"
       },
       {
         "command": "gitBranchPanel.disableDisconnectedFirst",
-        "title": "Git Branch Panel: Disable Disconnected First",
+        "title": "Disable Disconnected First",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "gitBranchPanel.setListView",
-        "title": "Git Branch Panel: Switch to List View",
+        "title": "Switch to List View",
         "icon": "$(list-selection)"
       },
       {
         "command": "gitBranchPanel.setGroupedView",
-        "title": "Git Branch Panel: Switch to Grouped View",
+        "title": "Switch to Grouped View",
         "icon": "$(list-tree)"
       },
       {
         "command": "gitBranchPanel.toggleToGroupedView",
-        "title": "Git Branch Panel: Switch to Grouped View",
+        "title": "Switch to Grouped View",
         "icon": "$(list-selection)"
       },
       {
         "command": "gitBranchPanel.toggleToListView",
-        "title": "Git Branch Panel: Switch to List View",
+        "title": "Switch to List View",
         "icon": "$(list-tree)"
       },
       {
         "command": "gitBranchPanel.openGithubRepository",
-        "title": "Git Branch Panel: Open GitHub Repository",
+        "title": "Open GitHub Repository",
         "icon": "$(globe)"
       },
       {
         "command": "gitBranchPanel.fetchRemoteBranches",
-        "title": "Git Branch Panel: Fetch Remote Branches",
+        "title": "Fetch Remote Branches",
         "icon": "$(cloud-download)"
       }
     ],

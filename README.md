@@ -16,6 +16,7 @@
 - 현재 `view mode`, `sort`, `disconnected first`, `branch filter` 상태를 워크스페이스에 저장합니다.
 - 현재 checkout된 로컬 브랜치를 강조해서 표시합니다.
 - 푸시가 필요한 로컬 브랜치를 표시합니다.
+- upstream 기준 `ahead / behind` 상태를 로컬 브랜치에 표시합니다.
 - 로컬 브랜치에서 다음 작업을 지원합니다.
   - `Checkout`
   - `New Branch from Selected Branch`
@@ -51,12 +52,11 @@
 
 - 현재 checkout된 로컬 브랜치에는 강조 마커가 붙습니다.
 - upstream이 있는 로컬 브랜치는 설명 영역에 upstream 이름을 표시합니다.
+- upstream이 있는 로컬 브랜치는 `↑2`, `↓1` 같은 ahead / behind 상태를 함께 표시합니다.
 - 푸시가 필요한 로컬 브랜치에는 별도 마커가 붙습니다.
 - upstream이 없는 로컬 브랜치는 일반 브랜치와 다르게 보이도록 표시됩니다.
 
 ## 지원하는 명령
-
-명령 팔레트에서는 대부분 `Git Branch Panel: ...` 형태로 표시됩니다.
 
 ### 로컬 브랜치
 
