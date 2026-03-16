@@ -1,7 +1,7 @@
 {
   "name": "git-branch-panel",
   "displayName": "Git Branch Panel",
-  "description": "A minimal VS Code extension that shows local and remote branches together.",
+  "description": "Manage local and remote GitHub branches from a dedicated Source Control panel in VS Code.",
   "version": "0.0.1",
   "publisher": "local-dev",
   "license": "MIT",
@@ -11,16 +11,26 @@
   "categories": [
     "Other"
   ],
+  "keywords": [
+    "git",
+    "github",
+    "branch",
+    "source-control",
+    "scm"
+  ],
   "activationEvents": [
     "onView:gitBranchPanel.branchesView",
     "onCommand:gitBranchPanel.refresh",
     "onCommand:gitBranchPanel.checkoutLocalBranch",
     "onCommand:gitBranchPanel.createLocalBranch",
     "onCommand:gitBranchPanel.pushLocalBranch",
+    "onCommand:gitBranchPanel.renameLocalBranch",
     "onCommand:gitBranchPanel.deleteLocalBranch",
     "onCommand:gitBranchPanel.checkoutRemoteBranchAsLocal",
     "onCommand:gitBranchPanel.createIndependentLocalBranchFromRemote",
     "onCommand:gitBranchPanel.changeSortOrder",
+    "onCommand:gitBranchPanel.searchBranches",
+    "onCommand:gitBranchPanel.clearBranchSearch",
     "onCommand:gitBranchPanel.toggleDisconnectedFirst",
     "onCommand:gitBranchPanel.enableDisconnectedFirst",
     "onCommand:gitBranchPanel.disableDisconnectedFirst",
@@ -29,7 +39,7 @@
     "onCommand:gitBranchPanel.toggleToGroupedView",
     "onCommand:gitBranchPanel.toggleToListView",
     "onCommand:gitBranchPanel.openGithubRepository",
-    "onCommand:gitBranchPanel.syncRemoteBranches"
+    "onCommand:gitBranchPanel.fetchRemoteBranches"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -49,81 +59,96 @@
       },
       {
         "command": "gitBranchPanel.checkoutLocalBranch",
-        "title": "Checkout",
+        "title": "Git Branch Panel: Checkout Branch",
         "icon": "$(play)"
       },
       {
         "command": "gitBranchPanel.createLocalBranch",
-        "title": "New Branch from Selected Branch"
+        "title": "Git Branch Panel: Create Local Branch"
       },
       {
         "command": "gitBranchPanel.pushLocalBranch",
-        "title": "Push Branch",
+        "title": "Git Branch Panel: Push Branch",
         "icon": "$(cloud-upload)"
       },
       {
+        "command": "gitBranchPanel.renameLocalBranch",
+        "title": "Git Branch Panel: Rename Branch",
+        "icon": "$(edit)"
+      },
+      {
         "command": "gitBranchPanel.deleteLocalBranch",
-        "title": "Delete Branch",
+        "title": "Git Branch Panel: Delete Branch",
         "icon": "$(trash)"
       },
       {
         "command": "gitBranchPanel.checkoutRemoteBranchAsLocal",
-        "title": "Checkout as Local Branch"
+        "title": "Git Branch Panel: Checkout Remote as Local Branch"
       },
       {
         "command": "gitBranchPanel.createIndependentLocalBranchFromRemote",
-        "title": "New Branch from Selected Branch",
+        "title": "Git Branch Panel: Create Local Branch from Remote",
         "icon": "$(git-branch-create)"
       },
       {
         "command": "gitBranchPanel.changeSortOrder",
-        "title": "Sort Branches",
+        "title": "Git Branch Panel: Change Sort Order",
         "icon": "$(sort-precedence)"
       },
       {
+        "command": "gitBranchPanel.searchBranches",
+        "title": "Git Branch Panel: Search Branches",
+        "icon": "$(search)"
+      },
+      {
+        "command": "gitBranchPanel.clearBranchSearch",
+        "title": "Git Branch Panel: Clear Branch Search",
+        "icon": "$(close)"
+      },
+      {
         "command": "gitBranchPanel.toggleDisconnectedFirst",
-        "title": "Disconnected First",
+        "title": "Git Branch Panel: Toggle Disconnected First",
         "icon": "$(plug)"
       },
       {
         "command": "gitBranchPanel.enableDisconnectedFirst",
-        "title": "Disconnected First On",
+        "title": "Git Branch Panel: Enable Disconnected First",
         "icon": "$(plug)"
       },
       {
         "command": "gitBranchPanel.disableDisconnectedFirst",
-        "title": "Disconnected First Off",
+        "title": "Git Branch Panel: Disable Disconnected First",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "gitBranchPanel.setListView",
-        "title": "List View",
+        "title": "Git Branch Panel: Switch to List View",
         "icon": "$(list-selection)"
       },
       {
         "command": "gitBranchPanel.setGroupedView",
-        "title": "Grouped View",
+        "title": "Git Branch Panel: Switch to Grouped View",
         "icon": "$(list-tree)"
       },
       {
         "command": "gitBranchPanel.toggleToGroupedView",
-        "title": "Switch to Grouped View",
+        "title": "Git Branch Panel: Switch to Grouped View",
         "icon": "$(list-selection)"
       },
       {
         "command": "gitBranchPanel.toggleToListView",
-        "title": "Switch to List View",
+        "title": "Git Branch Panel: Switch to List View",
         "icon": "$(list-tree)"
       },
       {
         "command": "gitBranchPanel.openGithubRepository",
-        "title": "Open GitHub Repository",
+        "title": "Git Branch Panel: Open GitHub Repository",
         "icon": "$(globe)"
       },
       {
-        "command": "gitBranchPanel.syncRemoteBranches",
-        "title": "Sync Remote Branches",
-        "icon": "$(sync)"
+        "command": "gitBranchPanel.fetchRemoteBranches",
+        "title": "Git Branch Panel: Fetch Remote Branches",
+        "icon": "$(cloud-download)"
       }
     ],
     "menus": {
@@ -137,6 +162,16 @@
           "command": "gitBranchPanel.changeSortOrder",
           "when": "view == gitBranchPanel.branchesView",
           "group": "navigation@2"
+        },
+        {
+          "command": "gitBranchPanel.searchBranches",
+          "when": "view == gitBranchPanel.branchesView",
+          "group": "navigation@2.2"
+        },
+        {
+          "command": "gitBranchPanel.clearBranchSearch",
+          "when": "view == gitBranchPanel.branchesView && gitBranchPanel.hasBranchFilter == true",
+          "group": "navigation@2.3"
         },
         {
           "command": "gitBranchPanel.disableDisconnectedFirst",
@@ -159,6 +194,11 @@
           "group": "navigation@2.5"
         },
         {
+          "command": "gitBranchPanel.fetchRemoteBranches",
+          "when": "view == gitBranchPanel.branchesView",
+          "group": "navigation@98"
+        },
+        {
           "command": "gitBranchPanel.openGithubRepository",
           "when": "view == gitBranchPanel.branchesView",
           "group": "navigation@99"
@@ -167,27 +207,32 @@
       "view/item/context": [
         {
           "command": "gitBranchPanel.checkoutLocalBranch",
-          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == currentLocalBranch)",
+          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == currentLocalBranch || viewItem == disconnectedLocalBranch || viewItem == currentDisconnectedLocalBranch)",
           "group": "navigation"
         },
         {
           "command": "gitBranchPanel.checkoutLocalBranch",
-          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == pushableLocalBranch)",
+          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == pushableLocalBranch || viewItem == disconnectedLocalBranch)",
           "group": "inline@1"
         },
         {
           "command": "gitBranchPanel.createLocalBranch",
-          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == currentLocalBranch)",
+          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == currentLocalBranch || viewItem == disconnectedLocalBranch || viewItem == currentDisconnectedLocalBranch)",
           "group": "navigation"
         },
         {
+          "command": "gitBranchPanel.renameLocalBranch",
+          "when": "view == gitBranchPanel.branchesView && (viewItem == disconnectedLocalBranch || viewItem == currentDisconnectedLocalBranch)",
+          "group": "navigation@1.5"
+        },
+        {
           "command": "gitBranchPanel.pushLocalBranch",
-          "when": "view == gitBranchPanel.branchesView && (viewItem == pushableLocalBranch || viewItem == currentPushableLocalBranch)",
+          "when": "view == gitBranchPanel.branchesView && (viewItem == pushableLocalBranch || viewItem == currentPushableLocalBranch || viewItem == disconnectedLocalBranch || viewItem == currentDisconnectedLocalBranch)",
           "group": "inline@2"
         },
         {
           "command": "gitBranchPanel.deleteLocalBranch",
-          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == pushableLocalBranch)",
+          "when": "view == gitBranchPanel.branchesView && (viewItem == localBranch || viewItem == pushableLocalBranch || viewItem == disconnectedLocalBranch)",
           "group": "inline@3"
         },
         {
@@ -206,14 +251,14 @@
           "group": "navigation@2"
         },
         {
-          "command": "gitBranchPanel.syncRemoteBranches",
+          "command": "gitBranchPanel.fetchRemoteBranches",
           "when": "view == gitBranchPanel.branchesView && viewItem == localGroup",
-          "group": "inline"
+          "group": "inline@1"
         },
         {
-          "command": "gitBranchPanel.syncRemoteBranches",
+          "command": "gitBranchPanel.fetchRemoteBranches",
           "when": "view == gitBranchPanel.branchesView && viewItem == remoteGroup",
-          "group": "inline"
+          "group": "inline@1"
         }
       ]
     }

@@ -11,6 +11,13 @@ type BranchKind = "local" | "remote" | null;
 export type BranchSortMode = "name" | "updated";
 export type BranchViewMode = "list" | "grouped";
 
+interface BranchViewState {
+  sortMode?: BranchSortMode;
+  viewMode?: BranchViewMode;
+  prioritizeDisconnectedBranches?: boolean;
+  branchFilter?: string;
+}
+
 const REPOSITORY_LABEL = "Repository";
 const LOCAL_BRANCHES_LABEL = "Local";
 const REMOTE_BRANCHES_LABEL = "Remote";
@@ -22,6 +29,25 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
   private sortMode: BranchSortMode = "updated";
   private viewMode: BranchViewMode = "list";
   private prioritizeDisconnectedBranches = true;
+  private branchFilter = "";
+
+  constructor(state?: BranchViewState) {
+    if (state?.sortMode) {
+      this.sortMode = state.sortMode;
+    }
+
+    if (state?.viewMode) {
+      this.viewMode = state.viewMode;
+    }
+
+    if (typeof state?.prioritizeDisconnectedBranches === "boolean") {
+      this.prioritizeDisconnectedBranches = state.prioritizeDisconnectedBranches;
+    }
+
+    if (typeof state?.branchFilter === "string") {
+      this.branchFilter = state.branchFilter.trim().toLocaleLowerCase();
+    }
+  }
 
   readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
 
@@ -42,6 +68,14 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     return this.sortMode === "name" ? "Name" : "Updated";
   }
 
+  getFilterDescription(): string | null {
+    if (!this.branchFilter) {
+      return null;
+    }
+
+    return `Filter: ${this.branchFilter}`;
+  }
+
   setViewMode(viewMode: BranchViewMode): void {
     this.viewMode = viewMode;
     this.refresh();
@@ -60,6 +94,20 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     return this.prioritizeDisconnectedBranches;
   }
 
+  setBranchFilter(filter: string): void {
+    this.branchFilter = filter.trim().toLocaleLowerCase();
+    this.refresh();
+  }
+
+  clearBranchFilter(): void {
+    this.branchFilter = "";
+    this.refresh();
+  }
+
+  getBranchFilter(): string {
+    return this.branchFilter;
+  }
+
   getTreeItem(element: BranchTreeItem): vscode.TreeItem {
     return element;
   }
@@ -68,12 +116,24 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
     const data = await getGitBranchData();
 
     if (!element) {
-      if (!data.repositoryName || !data.repositoryPath) {
+      if (data.workspaceStatus === "noWorkspace") {
         return [
           new BranchTreeItem(
-            "No Git repository found in the current folder.",
+            "Open a folder to use Git Branch Panel.",
             "message",
             vscode.TreeItemCollapsibleState.None,
+            "Open a workspace folder, then open Source Control again.",
+          ),
+        ];
+      }
+
+      if (data.workspaceStatus === "notGitRepository" || !data.repositoryName || !data.repositoryPath) {
+        return [
+          new BranchTreeItem(
+            "Current folder is not a Git repository.",
+            "message",
+            vscode.TreeItemCollapsibleState.None,
+            "Initialize Git here or open a different repository folder.",
           ),
         ];
       }
@@ -109,6 +169,33 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
 
     if (element.nodeType === "group") {
       const isLocalBranchGroup = element.label === LOCAL_BRANCHES_LABEL;
+      const branchKind = isLocalBranchGroup ? "local" : "remote";
+
+      if (!isLocalBranchGroup) {
+        if (data.remoteStatus === "noRemote") {
+          return [
+            new BranchTreeItem(
+              "No remote configured.",
+              "message",
+              vscode.TreeItemCollapsibleState.None,
+              "Add a remote such as origin to browse and fetch remote branches.",
+            ),
+          ];
+        }
+
+        if (data.remoteStatus === "loadFailed") {
+          return [
+            new BranchTreeItem(
+              "Couldn't load remote branches.",
+              "message",
+              vscode.TreeItemCollapsibleState.None,
+              data.remoteErrorMessage ??
+                "Check your network connection or Git authentication, then try again.",
+            ),
+          ];
+        }
+      }
+
       const branches = isLocalBranchGroup
         ? sortLocalBranches(
             data.localBranches,
@@ -117,23 +204,33 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
             this.prioritizeDisconnectedBranches,
           )
         : sortBranches(data.remoteBranches, this.sortMode);
+      const filteredBranches = filterBranches(
+        branches,
+        branchKind,
+        this.branchFilter,
+      );
 
-      if (branches.length === 0) {
+      if (filteredBranches.length === 0) {
         return [
           new BranchTreeItem(
-            "No branches found",
+            this.branchFilter
+              ? `No ${branchKind} branches match "${this.branchFilter}".`
+              : getEmptyBranchMessage(branchKind),
             "message",
             vscode.TreeItemCollapsibleState.None,
+            this.branchFilter
+              ? `Clear the search or try a different branch name.`
+              : getEmptyBranchDescription(branchKind),
           ),
         ];
       }
 
       if (this.viewMode === "grouped") {
         if (isLocalBranchGroup && data.currentBranch) {
-          const currentBranch = branches.find(
+          const currentBranch = filteredBranches.find(
             (branch) => branch.name === data.currentBranch,
           );
-          const otherBranches = branches.filter(
+          const otherBranches = filteredBranches.filter(
             (branch) => branch.name !== data.currentBranch,
           );
 
@@ -156,14 +253,14 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
         }
 
         return buildGroupedBranchItems(
-          branches,
+          filteredBranches,
           isLocalBranchGroup ? "local" : "remote",
           data.currentBranch,
           null,
         );
       }
 
-      return branches.map((branch) =>
+      return filteredBranches.map((branch) =>
         createBranchItem(
           branch,
           isLocalBranchGroup ? "local" : "remote",
@@ -183,9 +280,14 @@ export class BranchesViewProvider implements vscode.TreeDataProvider<BranchTreeI
             this.prioritizeDisconnectedBranches,
           )
         : sortBranches(data.remoteBranches, this.sortMode);
+      const filteredBranches = filterBranches(
+        branches,
+        branchKind,
+        this.branchFilter,
+      );
 
       return buildGroupedBranchItems(
-        branches,
+        filteredBranches,
         branchKind,
         data.currentBranch,
         element.pathPrefix ?? null,
@@ -313,6 +415,23 @@ function sortBranchesWithDisconnectedFirst(
   ];
 }
 
+function filterBranches(
+  branches: GitBranch[],
+  branchKind: "local" | "remote",
+  branchFilter: string,
+): GitBranch[] {
+  if (!branchFilter) {
+    return branches;
+  }
+
+  return branches.filter((branch) => {
+    const displayName =
+      branchKind === "local" ? branch.name : (branch.shortName ?? branch.name);
+
+    return displayName.toLocaleLowerCase().includes(branchFilter);
+  });
+}
+
 function buildBranchTooltip(branch: GitBranch): string {
   const upstreamLine = branch.upstreamName
     ? `\nUpstream: ${branch.upstreamName}`
@@ -365,7 +484,12 @@ function createBranchItem(
   item.upstreamName = branch.upstreamName;
   item.needsPush = branchKind === "local" ? needsPush(branch) : false;
 
-  if (branchKind === "local" && item.needsPush) {
+  if (branchKind === "local" && !item.hasUpstream) {
+    item.contextValue =
+      branch.name === currentBranch
+        ? "currentDisconnectedLocalBranch"
+        : "disconnectedLocalBranch";
+  } else if (branchKind === "local" && item.needsPush) {
     item.contextValue =
       branch.name === currentBranch
         ? "currentPushableLocalBranch"
@@ -498,4 +622,20 @@ function needsPush(branch: GitBranch): boolean {
   }
 
   return branch.upstreamTrackShort?.includes(">") ?? false;
+}
+
+function getEmptyBranchMessage(branchKind: "local" | "remote"): string {
+  if (branchKind === "local") {
+    return "No local branches found.";
+  }
+
+  return "No remote branches found.";
+}
+
+function getEmptyBranchDescription(branchKind: "local" | "remote"): string {
+  if (branchKind === "local") {
+    return "Create a branch or check out an existing branch to get started.";
+  }
+
+  return "Run Fetch Remote Branches after adding a remote, or push a branch to publish one.";
 }

@@ -11,9 +11,12 @@ export interface GitBranch {
 }
 
 export interface GitBranchData {
+  workspaceStatus: "ready" | "noWorkspace" | "notGitRepository";
   repositoryName: string | null;
   repositoryPath: string | null;
   remoteName: string | null;
+  remoteStatus: "ready" | "noRemote" | "loadFailed";
+  remoteErrorMessage: string | null;
   currentBranch: string | null;
   localBranches: GitBranch[];
   remoteBranches: GitBranch[];
@@ -23,9 +26,12 @@ export async function getGitBranchData(): Promise<GitBranchData> {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   if (!workspaceFolder) {
     return {
+      workspaceStatus: "noWorkspace",
       repositoryName: null,
       repositoryPath: null,
       remoteName: null,
+      remoteStatus: "noRemote",
+      remoteErrorMessage: null,
       currentBranch: null,
       localBranches: [],
       remoteBranches: [],
@@ -40,9 +46,12 @@ export async function getGitBranchData(): Promise<GitBranchData> {
 
   if (!isGitRepo || isGitRepo.trim() !== "true") {
     return {
+      workspaceStatus: "notGitRepository",
       repositoryName: null,
       repositoryPath: null,
       remoteName: null,
+      remoteStatus: "noRemote",
+      remoteErrorMessage: null,
       currentBranch: null,
       localBranches: [],
       remoteBranches: [],
@@ -50,25 +59,41 @@ export async function getGitBranchData(): Promise<GitBranchData> {
   }
 
   const remoteName = await getPrimaryRemoteName(cwd).catch(() => null);
-  const [currentBranchRaw, localRaw, remoteRaw] = await Promise.all([
+  const [currentBranchRaw, localRaw] = await Promise.all([
     runGitCommand(cwd, ["branch", "--show-current"]),
     runGitCommand(cwd, [
       "for-each-ref",
       "refs/heads",
       "--format=%(refname:short)\t%(committerdate:unix)\t%(upstream:short)\t%(upstream:trackshort)",
     ]),
-    remoteName ? runGitCommand(cwd, ["ls-remote", "--heads", remoteName]) : Promise.resolve(""),
   ]);
+  const remoteResult = remoteName
+    ? await runGitCommand(cwd, ["ls-remote", "--heads", remoteName])
+        .then((output) => ({ status: "ready" as const, output, errorMessage: null }))
+        .catch((error: unknown) => ({
+          status: "loadFailed" as const,
+          output: "",
+          errorMessage:
+            error instanceof Error ? error.message : "Failed to load remote branches.",
+        }))
+    : {
+        status: "noRemote" as const,
+        output: "",
+        errorMessage: null,
+      };
 
   const localBranches = normalizeBranchList(localRaw);
-  const remoteBranches = normalizeRemoteBranchList(remoteRaw, remoteName).filter(
+  const remoteBranches = normalizeRemoteBranchList(remoteResult.output, remoteName).filter(
     (branch) => !branch.name.endsWith("/HEAD")
   );
 
   return {
+    workspaceStatus: "ready",
     repositoryName: workspaceFolder.name,
     repositoryPath: cwd,
     remoteName,
+    remoteStatus: remoteResult.status,
+    remoteErrorMessage: remoteResult.errorMessage,
     currentBranch: normalizeBranchName(currentBranchRaw) ?? null,
     localBranches,
     remoteBranches,
@@ -92,6 +117,14 @@ export async function createLocalBranch(
   }
 
   await runGitCommand(repositoryPath, args);
+}
+
+export async function renameLocalBranch(
+  branchName: string,
+  nextBranchName: string,
+): Promise<void> {
+  const repositoryPath = await getRepositoryPath();
+  await runGitCommand(repositoryPath, ["branch", "-m", branchName, nextBranchName]);
 }
 
 export async function pushLocalBranch(branchName: string, upstreamName?: string | null): Promise<void> {
@@ -179,10 +212,10 @@ export async function getRepositoryGithubUrl(): Promise<string> {
   return githubUrl;
 }
 
-export async function syncRemoteBranches(): Promise<string> {
+export async function fetchRemoteBranches(): Promise<string> {
   const repositoryPath = await getRepositoryPath();
   const remoteName = await getPrimaryRemoteName(repositoryPath);
-  await runGitCommand(repositoryPath, ["ls-remote", "--heads", remoteName]);
+  await runGitCommand(repositoryPath, ["fetch", "--prune", remoteName]);
   return remoteName;
 }
 

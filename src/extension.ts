@@ -11,26 +11,68 @@ import {
   deleteLocalBranch,
   deleteRemoteBranch,
   checkoutRemoteBranchAsLocal,
+  fetchRemoteBranches,
   getRepositoryGithubUrl,
   pushLocalBranch,
-  syncRemoteBranches,
+  renameLocalBranch,
 } from "./git";
 
+const VIEW_STATE_STORAGE_KEY = "gitBranchPanel.viewState";
+
 export function activate(context: vscode.ExtensionContext): void {
-  const branchesViewProvider = new BranchesViewProvider();
+  const branchesViewProvider = new BranchesViewProvider(loadBranchViewState(context));
   void setBranchViewModeContext(branchesViewProvider.getViewMode());
   void setDisconnectedSortContext(branchesViewProvider.getPrioritizeDisconnectedBranches());
+  void setBranchFilterContext(Boolean(branchesViewProvider.getBranchFilter()));
 
   const treeView = vscode.window.createTreeView("gitBranchPanel.branchesView", {
     treeDataProvider: branchesViewProvider,
     showCollapseAll: false,
   });
-  treeView.description = branchesViewProvider.getSortDescription();
+  updateTreeViewDescription(treeView, branchesViewProvider);
 
   const refreshCommand = vscode.commands.registerCommand(
     "gitBranchPanel.refresh",
     () => {
       branchesViewProvider.refresh();
+    },
+  );
+
+  const searchBranchesCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.searchBranches",
+    async () => {
+      const currentFilter = branchesViewProvider.getBranchFilter();
+      const searchTerm = await vscode.window.showInputBox({
+        title: "Search Branches",
+        prompt: "Filter local and remote branches by name",
+        value: currentFilter,
+        placeHolder: "feature/login",
+        ignoreFocusOut: true,
+      });
+
+      if (searchTerm === undefined) {
+        return;
+      }
+
+      const trimmedSearchTerm = searchTerm.trim();
+      branchesViewProvider.setBranchFilter(trimmedSearchTerm);
+      void persistBranchViewState(context, branchesViewProvider);
+      await setBranchFilterContext(Boolean(trimmedSearchTerm));
+      updateTreeViewDescription(treeView, branchesViewProvider);
+    },
+  );
+
+  const clearBranchSearchCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.clearBranchSearch",
+    async () => {
+      if (!branchesViewProvider.getBranchFilter()) {
+        return;
+      }
+
+      branchesViewProvider.clearBranchFilter();
+      void persistBranchViewState(context, branchesViewProvider);
+      await setBranchFilterContext(false);
+      updateTreeViewDescription(treeView, branchesViewProvider);
     },
   );
 
@@ -200,7 +242,7 @@ export function activate(context: vscode.ExtensionContext): void {
           },
           async () => {
             await pushLocalBranch(branchName, item.upstreamName);
-            await syncRemoteBranches();
+            await fetchRemoteBranches();
           },
         );
         vscode.window.showInformationMessage(`Pushed local branch: ${branchName}`);
@@ -208,6 +250,81 @@ export function activate(context: vscode.ExtensionContext): void {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to push local branch.";
+        vscode.window.showErrorMessage(message);
+      }
+    },
+  );
+
+  const renameLocalBranchCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.renameLocalBranch",
+    async (item?: {
+      branchKind?: string;
+      fullBranchName?: string;
+      label?: string;
+      upstreamName?: string | null;
+      contextValue?: string;
+    }) => {
+      if (item?.branchKind !== "local") {
+        return;
+      }
+
+      if (item.upstreamName) {
+        vscode.window.showWarningMessage(
+          "Only local branches without an upstream can be renamed.",
+        );
+        return;
+      }
+
+      const branchName = item.fullBranchName ?? item.label;
+      if (!branchName) {
+        return;
+      }
+
+      const nextBranchNameInput = await vscode.window.showInputBox({
+        title: "Rename Branch",
+        prompt: `Enter a new name for ${branchName}`,
+        value: branchName,
+        ignoreFocusOut: true,
+      });
+
+      if (nextBranchNameInput === undefined) {
+        return;
+      }
+
+      const nextBranchName = nextBranchNameInput.trim();
+      if (!nextBranchName) {
+        vscode.window.showErrorMessage("Branch name is required.");
+        return;
+      }
+
+      if (nextBranchName === branchName) {
+        return;
+      }
+
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: `Renaming branch ${branchName} to ${nextBranchName}`,
+          },
+          async () => {
+            await renameLocalBranch(branchName, nextBranchName);
+          },
+        );
+
+        const isCurrentBranch =
+          item.contextValue === "currentLocalBranch" ||
+          item.contextValue === "currentPushableLocalBranch";
+
+        vscode.window.showInformationMessage(
+          isCurrentBranch
+            ? `Renamed current branch to: ${nextBranchName}`
+            : `Renamed branch to: ${nextBranchName}`,
+        );
+        branchesViewProvider.refresh();
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to rename branch.";
         vscode.window.showErrorMessage(message);
       }
     },
@@ -277,7 +394,7 @@ export function activate(context: vscode.ExtensionContext): void {
               }
 
               await deleteLocalBranch(branchName);
-              await syncRemoteBranches();
+              await fetchRemoteBranches();
             },
           );
         }
@@ -319,7 +436,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
 
       branchesViewProvider.setSortMode(selected.value);
-      treeView.description = branchesViewProvider.getSortDescription();
+      void persistBranchViewState(context, branchesViewProvider);
+      updateTreeViewDescription(treeView, branchesViewProvider);
     },
   );
 
@@ -328,6 +446,7 @@ export function activate(context: vscode.ExtensionContext): void {
     async () => {
       const nextValue = !branchesViewProvider.getPrioritizeDisconnectedBranches();
       branchesViewProvider.setPrioritizeDisconnectedBranches(nextValue);
+      void persistBranchViewState(context, branchesViewProvider);
       await setDisconnectedSortContext(nextValue);
     },
   );
@@ -336,6 +455,7 @@ export function activate(context: vscode.ExtensionContext): void {
     "gitBranchPanel.enableDisconnectedFirst",
     async () => {
       branchesViewProvider.setPrioritizeDisconnectedBranches(true);
+      void persistBranchViewState(context, branchesViewProvider);
       await setDisconnectedSortContext(true);
     },
   );
@@ -344,6 +464,7 @@ export function activate(context: vscode.ExtensionContext): void {
     "gitBranchPanel.disableDisconnectedFirst",
     async () => {
       branchesViewProvider.setPrioritizeDisconnectedBranches(false);
+      void persistBranchViewState(context, branchesViewProvider);
       await setDisconnectedSortContext(false);
     },
   );
@@ -352,6 +473,7 @@ export function activate(context: vscode.ExtensionContext): void {
     "gitBranchPanel.setListView",
     async () => {
       branchesViewProvider.setViewMode("list");
+      void persistBranchViewState(context, branchesViewProvider);
       await setBranchViewModeContext("list");
     },
   );
@@ -360,6 +482,7 @@ export function activate(context: vscode.ExtensionContext): void {
     "gitBranchPanel.setGroupedView",
     async () => {
       branchesViewProvider.setViewMode("grouped");
+      void persistBranchViewState(context, branchesViewProvider);
       await setBranchViewModeContext("grouped");
     },
   );
@@ -368,6 +491,7 @@ export function activate(context: vscode.ExtensionContext): void {
     "gitBranchPanel.toggleToGroupedView",
     async () => {
       branchesViewProvider.setViewMode("grouped");
+      void persistBranchViewState(context, branchesViewProvider);
       await setBranchViewModeContext("grouped");
     },
   );
@@ -376,6 +500,7 @@ export function activate(context: vscode.ExtensionContext): void {
     "gitBranchPanel.toggleToListView",
     async () => {
       branchesViewProvider.setViewMode("list");
+      void persistBranchViewState(context, branchesViewProvider);
       await setBranchViewModeContext("list");
     },
   );
@@ -396,20 +521,20 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
-  const syncRemoteBranchesCommand = vscode.commands.registerCommand(
-    "gitBranchPanel.syncRemoteBranches",
+  const fetchRemoteBranchesCommand = vscode.commands.registerCommand(
+    "gitBranchPanel.fetchRemoteBranches",
     async () => {
       try {
-        const remoteName = await syncRemoteBranches();
+        const remoteName = await fetchRemoteBranches();
         vscode.window.showInformationMessage(
-          `Synced remote branches from ${remoteName}.`,
+          `Fetched remote branches from ${remoteName}.`,
         );
         branchesViewProvider.refresh();
       } catch (error) {
         const message =
           error instanceof Error
             ? error.message
-            : "Failed to sync remote branches.";
+            : "Failed to fetch remote branches.";
         vscode.window.showErrorMessage(message);
       }
     },
@@ -422,11 +547,14 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     treeView,
     refreshCommand,
+    searchBranchesCommand,
+    clearBranchSearchCommand,
     checkoutLocalBranchCommand,
     checkoutRemoteBranchAsLocalCommand,
     createIndependentLocalBranchCommand,
     createLocalBranchCommand,
     pushLocalBranchCommand,
+    renameLocalBranchCommand,
     deleteLocalBranchCommand,
     changeSortOrderCommand,
     toggleDisconnectedSortCommand,
@@ -437,7 +565,7 @@ export function activate(context: vscode.ExtensionContext): void {
     toggleToGroupedViewCommand,
     toggleToListViewCommand,
     openGithubRepositoryCommand,
-    syncRemoteBranchesCommand,
+    fetchRemoteBranchesCommand,
     workspaceWatcher,
   );
 }
@@ -454,4 +582,43 @@ async function setDisconnectedSortContext(enabled: boolean): Promise<void> {
     "gitBranchPanel.disconnectedFirst",
     enabled,
   );
+}
+
+async function setBranchFilterContext(enabled: boolean): Promise<void> {
+  await vscode.commands.executeCommand("setContext", "gitBranchPanel.hasBranchFilter", enabled);
+}
+
+function updateTreeViewDescription(
+  treeView: vscode.TreeView<unknown>,
+  branchesViewProvider: BranchesViewProvider,
+): void {
+  const parts = [branchesViewProvider.getSortDescription()];
+  const filterDescription = branchesViewProvider.getFilterDescription();
+
+  if (filterDescription) {
+    parts.push(filterDescription);
+  }
+
+  treeView.description = parts.join(" | ");
+}
+
+function loadBranchViewState(context: vscode.ExtensionContext): {
+  sortMode?: BranchSortMode;
+  viewMode?: BranchViewMode;
+  prioritizeDisconnectedBranches?: boolean;
+  branchFilter?: string;
+} {
+  return context.workspaceState.get(VIEW_STATE_STORAGE_KEY, {});
+}
+
+async function persistBranchViewState(
+  context: vscode.ExtensionContext,
+  branchesViewProvider: BranchesViewProvider,
+): Promise<void> {
+  await context.workspaceState.update(VIEW_STATE_STORAGE_KEY, {
+    sortMode: branchesViewProvider.getSortMode(),
+    viewMode: branchesViewProvider.getViewMode(),
+    prioritizeDisconnectedBranches: branchesViewProvider.getPrioritizeDisconnectedBranches(),
+    branchFilter: branchesViewProvider.getBranchFilter(),
+  });
 }
