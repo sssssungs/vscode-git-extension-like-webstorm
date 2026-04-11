@@ -147,3 +147,5 @@ npm run compile
 ## 앞으로의 계획
 
 이 확장은 GitHub 브랜치 관리를 더 빠르게 만드는 기본 도구를 목표로 하고 있습니다. 다음 단계 계획은 [ROADMAP.md](/Users/randywon/Desktop/extension/ROADMAP.md)에서 정리합니다.
+
+test
